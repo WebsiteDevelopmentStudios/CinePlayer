@@ -34,16 +34,45 @@ export default async function handler(req, res) {
 
     const html2 = await response2.text();
 
-    // STEP 3: Find the <body> and return a large chunk of it
-    const bodyStart = html2.indexOf('<body');
-    const snippet = html2.substring(bodyStart, bodyStart + 3000);
+    // STEP 3: Extract all script src tags
+    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/g;
+    let scripts = [];
+    let match;
+    while ((match = scriptSrcRegex.exec(html2)) !== null) {
+      scripts.push(match[1]);
+    }
+
+    // STEP 4: Fetch each script and search for ".m3u8"
+    let foundSnippets = [];
+    
+    for (const scriptUrl of scripts) {
+      // Only check local Next.js chunks
+      if (!scriptUrl.startsWith('/_next/')) continue;
+      
+      const fullUrl = `https://cineby.hair${scriptUrl}`;
+      const scriptRes = await fetch(fullUrl);
+      const scriptText = await scriptRes.text();
+
+      if (scriptText.includes('.m3u8')) {
+        // Find all occurrences of .m3u8 and grab surrounding code
+        let idx = scriptText.indexOf('.m3u8');
+        while (idx !== -1) {
+          foundSnippets.push({
+            file: scriptUrl,
+            snippet: scriptText.substring(Math.max(0, idx - 300), idx + 300)
+          });
+          idx = scriptText.indexOf('.m3u8', idx + 1);
+        }
+      }
+    }
 
     return res.status(200).json({ 
-      message: "Body snippet",
-      snippet: snippet
+      message: "Searched all scripts",
+      foundSnippets: foundSnippets
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
+  }
+    
