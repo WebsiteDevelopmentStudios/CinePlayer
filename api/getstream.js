@@ -1,10 +1,10 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// This will now look inside the api/libs folder!
 const libsPath = path.join(__dirname, 'libs');
 
 export default async function handler(req, res) {
@@ -35,14 +35,20 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Launch Headless Browser using files copied at build time
+    // DEBUGGING: Check if our libs folder exists and what architecture Lambda is using
+    console.log("Arch:", process.arch);
+    console.log("Libs path exists:", fs.existsSync(libsPath));
+    if (fs.existsSync(libsPath)) {
+      console.log("Libs folder contents:", fs.readdirSync(libsPath));
+    }
+
+    // STEP 2: Launch Headless Browser
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       env: {
         ...process.env,
-        // Point Linux to our local api/libs folder
         LD_LIBRARY_PATH: `${libsPath}:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
@@ -77,5 +83,5 @@ export default async function handler(req, res) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
-  
+  }
+      
