@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Launch Headless Browser (Merged with the safe ChatGPT version)
+    // STEP 2: Launch Headless Browser
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
@@ -52,10 +52,18 @@ export default async function handler(req, res) {
 
     // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
+    
+    // Use 'domcontentloaded' so it doesn't hang waiting for networkidle
     await page.goto(movieUrl, {
-      waitUntil: 'networkidle2',
-      timeout: 12000
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
     }).catch(() => {});
+
+    // Poll for the stream URL for up to 8 seconds
+    for (let i = 0; i < 8; i++) {
+      if (foundStreamUrl) break;
+      await new Promise(r => setTimeout(r, 1000)); // wait 1 second
+    }
 
     await browser.close();
     browser = null;
@@ -82,5 +90,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-      }
-      
+        }
+  
