@@ -24,8 +24,10 @@ export default async function handler(req, res) {
     }
     const tmdbId = tmdbMatch[1];
 
+    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
+
     // STEP 2: Fetch cineby.hair using the TMDB ID
-    const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
+    const response2 = await fetch(movieUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
         'Referer': 'https://cineby.hair/'
@@ -40,11 +42,11 @@ export default async function handler(req, res) {
     if (workerMatch && workerMatch[1]) {
       const innerUrl = decodeURIComponent(workerMatch[1]);
       
-      // STEP 4: Fetch the inner URL and return the FULL response
+      // STEP 4: Fetch the inner URL using the exact movie URL as the Referer
       const response3 = await fetch(innerUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-          'Referer': 'https://cineby.hair/'
+          'Referer': movieUrl
         }
       });
 
@@ -52,7 +54,7 @@ export default async function handler(req, res) {
       const text3 = await response3.text();
 
       return res.status(200).json({ 
-        message: "Full inner URL response", 
+        message: "Full inner URL response with exact referer", 
         contentType: contentType,
         fullText: text3
       });
@@ -64,5 +66,5 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-          }
-                                    
+  }
+          
