@@ -33,43 +33,38 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // STEP 3: Extract and fetch the "unfortunatelyejectinflected" URL
-    const tokenUrlMatch = html2.match(/https:\/\/unfortunatelyejectinflected\.com\/[^"'\\\s]+/);
-    
-    if (!tokenUrlMatch) {
-      return res.status(404).json({ error: "Token URL not found in HTML" });
+    // STEP 3: Find direct m3u8 URLs if any exist
+    const streamUrlRegex = /https?:\/\/[^"'\s\\]+\.m3u8[^"'\s\\]*/g;
+    const directStreams = [...new Set(html2.match(streamUrlRegex) || [])];
+
+    // STEP 4: Extract specific chunk of code around "vidnest.fun" and "_stream?url="
+    const vidnestIndex = html2.indexOf('vidnest.fun');
+    const _streamIndex = html2.indexOf('_stream?url=');
+
+    let vidnestContext = "";
+    if (vidnestIndex !== -1) {
+      vidnestContext = html2.substring(Math.max(0, vidnestIndex - 500), vidnestIndex + 500);
+    }
+
+    let _streamContext = "";
+    if (_streamIndex !== -1) {
+      _streamContext = html2.substring(Math.max(0, _streamIndex - 500), _streamIndex + 500);
     }
     
-    const tokenUrl = tokenUrlMatch[0];
-
-    // Fetch the token URL and capture everything
-    const tokenRes = await fetch(tokenUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': movieUrl,
-        'Accept': '*/*'
-      },
-      redirect: 'manual' // Don't follow redirects, so we can see where it wants to send us
-    });
-
-    const tokenText = await tokenRes.text();
-
-    // Get all headers
-    const headers = {};
-    tokenRes.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
+    // STEP 5: Hunt for JSON properties that might contain the stream source
+    // e.g., "streamUrl":"https://...", "source":"...", "m3u8":"..."
+    const streamPropMatch = html2.match(/"(?:streamUrl|source|sources|src|m3u8|file|playlist)"\s*:\s*("[^"]+"|\[[^\]]+\])/g);
 
     return res.status(200).json({
-      message: "Token URL fetched",
-      tokenUrl: tokenUrl,
-      tokenStatus: tokenRes.status,
-      tokenHeaders: headers,
-      tokenResponseSnippet: tokenText.slice(0, 1000) // See if it returns JSON or JS
+      message: "Deep HTML context extraction",
+      directM3u8Urls: directStreams,
+      vidnestContext: vidnestContext,
+      _streamContext: _streamContext,
+      streamProperties: streamPropMatch
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
-  
+  }
+        
