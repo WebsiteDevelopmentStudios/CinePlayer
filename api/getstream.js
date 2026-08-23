@@ -1,7 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-import fs from 'fs';
-import tar from 'tar';
+// We removed fs and tar since we don't need them anymore
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,44 +30,12 @@ export default async function handler(req, res) {
 
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Download and extract missing libraries to /tmp using pure JS
-    if (!fs.existsSync('/tmp/libnss3.so')) {
-      // Your original URL
-      let url = 'https://raw.githubusercontent.com/ultrasecurity/nss-shared-libaries/main/nss_libs.tar.gz';
-      let nssRes = await fetch(url);
-      
-      // If the original URL is dead/not found, try a backup URL
-      if (!nssRes.ok) {
-        url = 'https://raw.githubusercontent.com/Sparticuz/nss/main/nss.tar.gz'; 
-        nssRes = await fetch(url);
-      }
-
-      // Make sure we actually got a file, not an HTML 404 error page!
-      if (!nssRes.ok) {
-        return res.status(500).json({ error: `Failed to download NSS libraries. GitHub URL is dead (${nssRes.status}).` });
-      }
-
-      const nssBuffer = Buffer.from(await nssRes.arrayBuffer());
-      fs.writeFileSync('/tmp/nss.tar.gz', nssBuffer);
-      
-      // Added gzip: true because it's a .tar.gz file
-      await tar.x({ 
-        file: '/tmp/nss.tar.gz', 
-        C: '/tmp/', 
-        strict: true,
-        gzip: true 
-      });
-    }
-
-    // STEP 3: Launch Headless Browser
+    // STEP 2: Launch Headless Browser (Skipping NSS download entirely)
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-      env: {
-        ...process.env,
-        LD_LIBRARY_PATH: `/tmp:${process.env.LD_LIBRARY_PATH || ''}`,
-      },
+      // Removed the env LD_LIBRARY_PATH part
     });
 
     const page = await browser.newPage();
@@ -84,12 +51,12 @@ export default async function handler(req, res) {
       request.continue();
     });
 
-    // STEP 4: Navigate to the movie page
+    // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
     await browser.close();
 
-    // STEP 5: Return the intercepted URL
+    // STEP 4: Return the intercepted URL
     if (foundStreamUrl) {
       return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
@@ -100,5 +67,4 @@ export default async function handler(req, res) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-    }
-      
+      }
