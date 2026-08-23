@@ -34,47 +34,28 @@ export default async function handler(req, res) {
 
     const html2 = await response2.text();
 
-    // STEP 3: Search for the Cloudflare Worker stream URL
-    const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=([^\s"'\\]+)/);
-    
-    if (workerMatch && workerMatch[1]) {
-      const innerUrl = decodeURIComponent(workerMatch[1]);
-      
-      // STEP 4: Fetch the inner URL directly
-      const response3 = await fetch(innerUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-          'Referer': 'https://cineby.hair/'
-        }
-      });
+    // STEP 3: Search for common player variables
+    const keywords = ['sources', 'file:', 'src:', 'api', 'fetch(', 'm3u8', 'playlist'];
+    let snippets = [];
 
-      const contentType = response3.headers.get('content-type');
-      const text3 = await response3.text();
-
-      // If it's an m3u8 file, return it directly
-      if (contentType.includes('mpegurl') || text3.trim().startsWith('#EXTM3U')) {
-        return res.status(200).json({ streamUrl: innerUrl });
-      } 
-      
-      // If it's HTML or something else, let's look for an m3u8 link inside it
-      const m3u8Match = text3.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/);
-      if (m3u8Match && m3u8Match[0]) {
-        return res.status(200).json({ streamUrl: m3u8Match[0] });
+    keywords.forEach(keyword => {
+      let index = html2.indexOf(keyword);
+      if (index !== -1) {
+        // Grab 200 chars before and after the keyword
+        snippets.push({
+          keyword: keyword,
+          snippet: html2.substring(Math.max(0, index - 200), index + 200)
+        });
       }
+    });
 
-      // Fallback: return a snippet so we can see what the inner URL returned
-      return res.status(200).json({ 
-        message: "Inner URL did not return m3u8 directly", 
-        contentType: contentType,
-        snippet: text3.substring(0, 500)
-      });
-
-    } else {
-      return res.status(404).json({ error: "Stream URL not found in HTML" });
-    }
+    return res.status(200).json({ 
+      message: "Found keywords",
+      snippets: snippets
+    });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-          }
-      
+      }
+                                            
