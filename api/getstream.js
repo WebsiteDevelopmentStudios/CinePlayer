@@ -2,10 +2,9 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const libsPath = path.join(__dirname, 'libs');
+// Point to the root 'libs' folder
+const libsPath = path.join(process.cwd(), 'libs');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -91,4 +90,4 @@ export default async function handler(req, res) {
     });
   }
       }
-  
+    
