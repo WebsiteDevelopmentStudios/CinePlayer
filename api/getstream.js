@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   if (!imdb) {
     return res.status(400).json({ error: "No IMDb ID provided" });
   }
-  
+
   let browser = null;
   
   try {
@@ -21,28 +21,42 @@ export default async function handler(req, res) {
         'Referer': 'https://2embed.cc/'
       }
     });
-    
+
     const html1 = await response1.text();
     const tmdbMatch = html1.match(/tmdb=(\d+)/);
     
     if (!tmdbMatch || !tmdbMatch[1]) {
       return res.status(404).json({ error: "Could not find TMDB ID on 2embed" });
     }
-    
+
     const tmdbId = tmdbMatch[1];
 
     // STEP 2: Download and extract missing libraries to /tmp using pure JS
     if (!fs.existsSync('/tmp/libnss3.so')) {
-      // Direct raw link to avoid GitHub HTML redirects
-      const url = 'https://raw.githubusercontent.com/ultrasecurity/nss-shared-libaries/main/nss_libs.tar.gz';
-      const nssRes = await fetch(url);
-      const nssBuffer = Buffer.from(await nssRes.arrayBuffer());
+      // Your original URL
+      let url = 'https://raw.githubusercontent.com/ultrasecurity/nss-shared-libaries/main/nss_libs.tar.gz';
+      let nssRes = await fetch(url);
       
+      // If the original URL is dead/not found, try a backup URL
+      if (!nssRes.ok) {
+        url = 'https://raw.githubusercontent.com/Sparticuz/nss/main/nss.tar.gz'; 
+        nssRes = await fetch(url);
+      }
+
+      // Make sure we actually got a file, not an HTML 404 error page!
+      if (!nssRes.ok) {
+        return res.status(500).json({ error: `Failed to download NSS libraries. GitHub URL is dead (${nssRes.status}).` });
+      }
+
+      const nssBuffer = Buffer.from(await nssRes.arrayBuffer());
       fs.writeFileSync('/tmp/nss.tar.gz', nssBuffer);
-      await tar.x({
-        file: '/tmp/nss.tar.gz',
-        C: '/tmp/',
-        strict: true
+      
+      // Added gzip: true because it's a .tar.gz file
+      await tar.x({ 
+        file: '/tmp/nss.tar.gz', 
+        C: '/tmp/', 
+        strict: true,
+        gzip: true 
       });
     }
 
@@ -53,16 +67,14 @@ export default async function handler(req, res) {
       headless: chromium.headless,
       env: {
         ...process.env,
-        // Tell Linux to look in /tmp for the extracted files
         LD_LIBRARY_PATH: `/tmp:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
-    
+
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
     
     let foundStreamUrl = null;
-    
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
@@ -75,7 +87,6 @@ export default async function handler(req, res) {
     // STEP 4: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
-    
     await browser.close();
 
     // STEP 5: Return the intercepted URL
@@ -84,9 +95,10 @@ export default async function handler(req, res) {
     } else {
       return res.status(404).json({ success: false, error: "Timeout or could not bypass anti-bot." });
     }
+
   } catch (error) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
-  
+    }
+      
