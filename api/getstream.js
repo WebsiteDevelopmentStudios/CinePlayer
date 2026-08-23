@@ -1,10 +1,7 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-import path from 'path';
 import fs from 'fs';
-
-// Point to the root 'libs' folder
-const libsPath = path.join(process.cwd(), 'libs');
+import tar from 'tar';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,7 +12,6 @@ export default async function handler(req, res) {
   }
   
   let browser = null;
-  let diagnostics = {};
   
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
@@ -35,24 +31,30 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // DIAGNOSTICS GATHERING
-    let libsContent = [];
-    if (fs.existsSync(libsPath)) {
-      libsContent = fs.readdirSync(libsPath);
+    // STEP 2: Download and extract missing libraries to /tmp using pure JS
+    if (!fs.existsSync('/tmp/libnss3.so')) {
+      // Direct raw link to avoid GitHub HTML redirects
+      const url = 'https://raw.githubusercontent.com/ultrasecurity/nss-shared-libaries/main/nss_libs.tar.gz';
+      const nssRes = await fetch(url);
+      const nssBuffer = Buffer.from(await nssRes.arrayBuffer());
+      
+      fs.writeFileSync('/tmp/nss.tar.gz', nssBuffer);
+      await tar.x({
+        file: '/tmp/nss.tar.gz',
+        C: '/tmp/',
+        strict: true
+      });
     }
-    diagnostics.arch = process.arch;
-    diagnostics.libsPathExists = fs.existsSync(libsPath);
-    diagnostics.libsFolderContents = libsContent;
-    diagnostics.libsPathValue = libsPath;
 
-    // STEP 2: Launch Headless Browser
+    // STEP 3: Launch Headless Browser
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       env: {
         ...process.env,
-        LD_LIBRARY_PATH: `${libsPath}:${process.env.LD_LIBRARY_PATH || ''}`,
+        // Tell Linux to look in /tmp for the extracted files
+        LD_LIBRARY_PATH: `/tmp:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
     
@@ -70,13 +72,13 @@ export default async function handler(req, res) {
       request.continue();
     });
 
-    // STEP 3: Navigate to the movie page
+    // STEP 4: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
     
     await browser.close();
 
-    // STEP 4: Return the intercepted URL
+    // STEP 5: Return the intercepted URL
     if (foundStreamUrl) {
       return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
@@ -84,10 +86,7 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     if (browser) await browser.close();
-    return res.status(500).json({ 
-      error: "Crash reason: " + error.message,
-      diagnostics: diagnostics
-    });
+    return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-    
+}
+  
