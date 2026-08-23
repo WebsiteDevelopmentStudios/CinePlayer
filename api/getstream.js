@@ -33,10 +33,43 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // Return the FULL Raw HTML
-    return res.status(200).send(html2);
+    // STEP 3: Extract and fetch the "unfortunatelyejectinflected" URL
+    const tokenUrlMatch = html2.match(/https:\/\/unfortunatelyejectinflected\.com\/[^"'\\\s]+/);
+    
+    if (!tokenUrlMatch) {
+      return res.status(404).json({ error: "Token URL not found in HTML" });
+    }
+    
+    const tokenUrl = tokenUrlMatch[0];
+
+    // Fetch the token URL and capture everything
+    const tokenRes = await fetch(tokenUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': movieUrl,
+        'Accept': '*/*'
+      },
+      redirect: 'manual' // Don't follow redirects, so we can see where it wants to send us
+    });
+
+    const tokenText = await tokenRes.text();
+
+    // Get all headers
+    const headers = {};
+    tokenRes.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    return res.status(200).json({
+      message: "Token URL fetched",
+      tokenUrl: tokenUrl,
+      tokenStatus: tokenRes.status,
+      tokenHeaders: headers,
+      tokenResponseSnippet: tokenText.slice(0, 1000) // See if it returns JSON or JS
+    });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
 }
+  
