@@ -34,30 +34,18 @@ export default async function handler(req, res) {
 
     const html2 = await response2.text();
 
-    // STEP 3: Extract all URLs from the HTML
-    const urlRegex = /https?:\/\/[^\s"'<>\)]+/g;
-    const matches = html2.match(urlRegex);
+    // STEP 3: Search for the Cloudflare Worker stream URL
+    const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=[^\s"'\\]+/);
     
-    // Filter out common tracking/analytics URLs to clean up the list
-    const filteredUrls = matches ? matches.filter(url => 
-      !url.includes('google') && 
-      !url.includes('cloudflare') && 
-      !url.includes('facebook') && 
-      !url.includes('hotjar') && 
-      !url.includes('clarity.ms') && 
-      !url.includes('tawk.to') &&
-      !url.includes('propeller') &&
-      !url.includes('hilltopads') &&
-      !url.includes('popads')
-    ) : [];
-
-    return res.status(200).json({ 
-      message: "Extracted URLs",
-      urls: filteredUrls
-    });
+    if (workerMatch && workerMatch[0]) {
+      const streamUrl = workerMatch[0];
+      return res.status(200).json({ streamUrl });
+    } else {
+      return res.status(404).json({ error: "Stream URL not found in HTML" });
+    }
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-        }
-    
+      }
+      
