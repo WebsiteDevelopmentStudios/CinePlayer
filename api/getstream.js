@@ -34,28 +34,26 @@ export default async function handler(req, res) {
 
     const html2 = await response2.text();
 
-    // STEP 3: Search for common player variables
-    const keywords = ['sources', 'file:', 'src:', 'api', 'fetch(', 'm3u8', 'playlist'];
-    let snippets = [];
+    // STEP 3: Extract all script src tags
+    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/g;
+    let scripts = [];
+    let match;
+    while ((match = scriptSrcRegex.exec(html2)) !== null) {
+      scripts.push(match[1]);
+    }
 
-    keywords.forEach(keyword => {
-      let index = html2.indexOf(keyword);
-      if (index !== -1) {
-        // Grab 200 chars before and after the keyword
-        snippets.push({
-          keyword: keyword,
-          snippet: html2.substring(Math.max(0, index - 200), index + 200)
-        });
-      }
-    });
+    // STEP 4: Look for JSON data or window variables
+    const jsonMatches = html2.match(/\{[^{}]*"sources"[^{}]*\}/g) || [];
+    const windowMatches = html2.match(/window\.[a-zA-Z_]+\s*=\s*[^;]+/g) || [];
 
     return res.status(200).json({ 
-      message: "Found keywords",
-      snippets: snippets
+      message: "Extracted scripts and data",
+      scripts: scripts,
+      jsonMatches: jsonMatches,
+      windowMatches: windowMatches
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-                                            
+    }
