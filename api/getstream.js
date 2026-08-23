@@ -1,6 +1,11 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// This will now look inside the api/libs folder!
+const libsPath = path.join(__dirname, 'libs');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -37,8 +42,8 @@ export default async function handler(req, res) {
       headless: chromium.headless,
       env: {
         ...process.env,
-        // Point Linux to our local libs folder
-        LD_LIBRARY_PATH: `${path.join(process.cwd(), 'libs')}:${process.env.LD_LIBRARY_PATH || ''}`,
+        // Point Linux to our local api/libs folder
+        LD_LIBRARY_PATH: `${libsPath}:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
     
@@ -72,4 +77,5 @@ export default async function handler(req, res) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-    }
+}
+  
