@@ -1,3 +1,8 @@
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
+import { execSync } from 'child_process';
+import fs from 'fs';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { imdb } = req.query;
@@ -5,6 +10,8 @@ export default async function handler(req, res) {
   if (!imdb) {
     return res.status(400).json({ error: "No IMDb ID provided" });
   }
+  
+  let browser = null;
   
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
@@ -24,34 +31,55 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Fetch the movie page natively (No headless browser needed!)
-    const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://cineby.hair/'
-      }
+    // STEP 2: Fix Amazon Linux 2023 (Node 20) missing libraries automatically
+    if (!fs.existsSync('/tmp/libnss3.so')) {
+      console.log("Downloading missing nss libraries for Node 20...");
+      execSync('curl -sL https://github.com/ultrasecurity/nss-shared-libaries/raw/main/nss_libs.tar.gz -o /tmp/nss.tar.gz');
+      execSync('tar -xzf /tmp/nss.tar.gz -C /tmp/');
+      console.log("Libraries extracted successfully.");
+    }
+
+    // STEP 3: Launch Headless Browser
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      env: {
+        ...process.env,
+        // Tell Linux to use our freshly downloaded .so files
+        LD_LIBRARY_PATH: `/tmp:${process.env.LD_LIBRARY_PATH || ''}`,
+      },
     });
     
-    const html2 = await response2.text();
-
-    // STEP 3: Search for the m3u8 URL inside the returned HTML/Next.js payload
-    // This regex looks for any URL ending in .m3u8
-    const match = html2.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/);
+    const page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
     
-    if (match && match[0]) {
-      return res.status(200).json({ 
-        success: true, 
-        streamUrl: match[0] 
-      });
+    let foundStreamUrl = null;
+    
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('.m3u8') && !url.includes('cineby.hair/_stream')) {
+        foundStreamUrl = url;
+      }
+      request.continue();
+    });
+
+    // STEP 4: Navigate to the movie page
+    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
+    await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
+    
+    await browser.close();
+
+    // STEP 5: Return the intercepted URL
+    if (foundStreamUrl) {
+      return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
-      // If it's not in the HTML, it means the site generates it dynamically with deeper JavaScript
-      return res.status(404).json({ 
-        success: false, 
-        error: "m3u8 link not found in HTML. Dynamic JS execution might still be required." 
-      });
+      return res.status(404).json({ success: false, error: "Timeout or could not bypass anti-bot." });
     }
   } catch (error) {
+    if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
-  
+                }
+                                  
