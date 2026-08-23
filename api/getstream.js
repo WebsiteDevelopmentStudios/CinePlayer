@@ -22,63 +22,52 @@ export default async function handler(req, res) {
     }
 
     const tmdbId = tmdbMatch[1];
-    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
 
-    // STEP 2: Test common Next.js API endpoints to bypass the frontend entirely
-    const apiVariations = [
-      `https://cineby.hair/api/source/${tmdbId}`,
-      `https://cineby.hair/api/sources/${tmdbId}`,
-      `https://cineby.hair/api/movie/${tmdbId}`,
-      `https://cineby.hair/api/movies/${tmdbId}`,
-      `https://cineby.hair/api/stream/${tmdbId}`
-    ];
-
-    const apiResults = [];
-
-    for (const apiUrl of apiVariations) {
-      const apiRes = await fetch(apiUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-          'Referer': movieUrl,
-          'Accept': 'application/json'
-        }
-      });
-      
-      const contentType = apiRes.headers.get('content-type') || 'unknown';
-      const text = await apiRes.text();
-      
-      apiResults.push({
-        url: apiUrl,
-        status: apiRes.status,
-        contentType: contentType,
-        snippet: text.slice(0, 200)
-      });
-    }
-
-    // STEP 3: Try fetching the HTML 1 more time and hunt deep for "playlist" or "file"
-    const response2 = await fetch(movieUrl, {
+    // STEP 2: Try the Vidnest.fun API directly to bypass the cineby.hair anti-bot mess
+    const vidnestApiUrl = `https://vidnest.fun/api/source/movie/${tmdbId}`;
+    
+    const vidnestRes = await fetch(vidnestApiUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://cineby.hair/'
+        'Referer': 'https://cineby.hair/',
+        'Accept': 'application/json',
+        'Origin': 'https://vidnest.fun'
       }
     });
-    const html2 = await response2.text();
 
-    // Search for UP_HOST to understand what host the proxy is actually proxying to
-    const upHostMatch = html2.match(/UP_HOST\s*=\s*['"]([^'"]+)['"]/);
-    const myHostMatch = html2.match(/MY_HOST\s*=\s*['"]([^'"]+)['"]/);
+    const vidnestStatus = vidnestRes.status;
+    const vidnestContentType = vidnestRes.headers.get('content-type') || 'unknown';
+    const vidnestText = await vidnestRes.text();
+
+    // Check if the response is JSON and contains an m3u8
+    let parsedJson = null;
+    let foundM3u8 = null;
+    
+    if (vidnestContentType.includes('application/json')) {
+      try {
+        parsedJson = JSON.parse(vidnestText);
+        // Convert JSON to string to search for m3u8 deep inside the object
+        const jsonStr = JSON.stringify(parsedJson);
+        const m3u8Match = jsonStr.match(/https?:\/\/[^"]+\.m3u8[^"]*/);
+        if (m3u8Match && m3u8Match[0]) {
+          foundM3u8 = m3u8Match[0].replace(/\\\//g, '/'); // Unescape slashes if needed
+        }
+      } catch (e) {}
+    }
 
     return res.status(200).json({
-      message: "API Endpoint tests and variable extraction",
-      apiResults: apiResults,
-      proxyVariables: {
-        UP_HOST: upHostMatch ? upHostMatch[1] : null,
-        MY_HOST: myHostMatch ? myHostMatch[1] : null
-      }
+      success: foundM3u8 ? true : false,
+      message: foundM3u8 ? "Found m3u8 via Vidnest API!" : "Vidnest API did not return a direct stream. We'll need a headless browser next.",
+      tmdbId: tmdbId,
+      vidnestApiUrl: vidnestApiUrl,
+      vidnestStatus: vidnestStatus,
+      vidnestContentType: vidnestContentType,
+      foundM3u8: foundM3u8,
+      apiResponseSnippet: vidnestText.slice(0, 1000) // Show us what it returned
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-        }
-            
+  }
+  
