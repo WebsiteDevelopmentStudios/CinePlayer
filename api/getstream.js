@@ -33,65 +33,61 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // STEP 3: Search for the Cloudflare Worker URL to get the base host/path
-    const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=([^\s"'\\]+)/);
+    // STEP 3: Extract ALL URLs from the HTML
+    const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+    const allUrls = [...new Set(html2.match(urlRegex) || [])];
+
+    // Filter out common static assets to reduce noise
+    const filteredUrls = allUrls.filter(url => 
+        !url.includes('.css') && 
+        !url.includes('.woff') && 
+        !url.includes('.png') && 
+        !url.includes('.svg') && 
+        !url.includes('.ico') &&
+        !url.includes('googleapis.com') &&
+        !url.includes('fonts.')
+    );
+
+    // STEP 4: Search for specific keywords in the HTML to find the hidden stream context
+    const keywordMatches = [];
     
-    if (!workerMatch || !workerMatch[1]) {
-      return res.status(404).json({ error: "Stream URL not found in HTML" });
-    }
-
-    const workerUrl = decodeURIComponent(workerMatch[1]); // e.g., https://fn.gaudsfervour.qpon/r1a02f07a70b83d18c/130989
-
-    // STEP 4: Try variations of appending m3u8 paths to the worker URL
-    const variations = [
-      `${workerUrl}/master.m3u8`,
-      `${workerUrl}.m3u8`,
-      `${workerUrl}/index.m3u8`
-    ];
-
-    const testResults = [];
-    let finalM3u8 = null;
-
-    for (const testUrl of variations) {
-      try {
-        const testRes = await fetch(testUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-            'Referer': movieUrl
-          }
-        });
-        const contentType = testRes.headers.get('content-type') || 'unknown';
-        const text = await testRes.text();
-        
-        testResults.push({ url: testUrl, status: testRes.status, contentType, snippet: text.slice(0, 100) });
-
-        // If we find an m3u8 playlist, we've found our stream!
-        if (contentType.includes('mpegurl') || text.trim().startsWith('#EXTM3U')) {
-          finalM3u8 = testUrl;
-          break; // Stop testing other variations
-        }
-      } catch (e) {
-        testResults.push({ url: testUrl, error: e.message });
-      }
-    }
-
-    if (finalM3u8) {
-      return res.status(200).json({
-        success: true,
-        streamUrl: finalM3u8,
-        message: "Successfully found .m3u8 by appending it to the URL"
-      });
-    } else {
-      return res.status(200).json({
-        success: false,
-        message: "Worker URL exists, but appending m3u8 variations did not trigger the playlist.",
-        baseWorkerUrl: workerUrl,
-        testResults: testResults
+    // Search for 'm3u8'
+    const m3u8Index = html2.indexOf('m3u8');
+    if (m3u8Index !== -1) {
+      keywordMatches.push({
+        keyword: 'm3u8',
+        context: html2.substring(Math.max(0, m3u8Index - 150), m3u8Index + 150)
       });
     }
+
+    // Search for '"source"'
+    const sourceIndex = html2.indexOf('"source"');
+    if (sourceIndex !== -1) {
+      keywordMatches.push({
+        keyword: '"source"',
+        context: html2.substring(Math.max(0, sourceIndex - 100), sourceIndex + 200)
+      });
+    }
+
+    // Search for 'playlist'
+    const playlistIndex = html2.indexOf('playlist');
+    if (playlistIndex !== -1) {
+      keywordMatches.push({
+        keyword: 'playlist',
+        context: html2.substring(Math.max(0, playlistIndex - 100), playlistIndex + 200)
+      });
+    }
+
+    return res.status(200).json({
+      message: "URLs and keyword contexts extracted",
+      movieUrl: movieUrl,
+      htmlLength: html2.length,
+      extractedUrls: filteredUrls,
+      keywordContexts: keywordMatches
+    });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-          }
-                          
+        }
+  
