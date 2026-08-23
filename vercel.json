@@ -3,7 +3,7 @@
     "api/getstream.js": {
       "memory": 1024,
       "maxDuration": 15,
-      "includeFiles": "api/libs/**"
+      "includeFiles": "libs/**"
     }
   }
 }
