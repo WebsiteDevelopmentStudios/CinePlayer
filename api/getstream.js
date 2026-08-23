@@ -8,33 +8,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(`https://vidsrc2.ru/embed/movie/${imdb}`, {
+    // Call MultiEmbed's direct stream API
+    const response = await fetch(`https://multiembed.mov/directstream?video_id=${imdb}`, {
+      redirect: 'follow', // Tells Vercel to follow the redirect to the final .m3u8 URL
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': 'https://vidsrc2.ru/'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
       }
     });
 
     if (!response.ok) {
-      return res.status(404).json({ error: `Failed to reach vidsrc2.ru (Status: ${response.status})` });
+      return res.status(404).json({ error: `Failed to reach MultiEmbed (Status: ${response.status})` });
     }
 
-    const html = await response.text();
+    // By this point, response.url contains the final redirect URL (which should be the .m3u8)
+    const streamUrl = response.url;
 
-    // Let's return a chunk of the HTML so we can see exactly what Vercel is downloading
-    if (html.length === 0) {
-      return res.status(404).json({ error: "Page returned empty HTML" });
+    if (streamUrl && streamUrl.includes('.m3u8')) {
+      res.status(200).json({ success: true, streamUrl: streamUrl });
+    } else {
+      // If it didn't redirect to an m3u8, let's see what it redirected to
+      res.status(404).json({ error: "Did not redirect to an m3u8 file.", finalUrl: streamUrl });
     }
-
-    // Return the first 2000 characters of the HTML so we can inspect it
-    res.status(200).json({ 
-      success: false, 
-      htmlPreview: html.substring(0, 2000) 
-    });
 
   } catch (error) {
     res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
+        }
