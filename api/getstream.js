@@ -33,52 +33,10 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // STEP 3: Extract context of "130989" to see how the player knows what ID to request
-    const idContextIndex = html2.indexOf('130989');
-    let idContext = "Not found in HTML";
-    if (idContextIndex !== -1) {
-      idContext = html2.substring(Math.max(0, idContextIndex - 150), idContextIndex + 150);
-    }
-
-    // Let's also see what vidnest.fun returns
-    const vidnestRes = await fetch('https://vidnest.fun', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': movieUrl
-      }
-    }).catch(e => ({ status: 'failed', text: () => e.message }));
-    
-    const vidnestText = await vidnestRes.text();
-
-    // STEP 4: Fetch the inner playwright URL with STRICT headers (Origin, X-Requested-With)
-    const strictHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-      'Referer': movieUrl,
-      'Origin': 'https://cineby.hair',
-      'Accept': '*/*'
-    };
-
-    const strictResponse = await fetch('https://fn.gaudsfervour.qpon/r1a02f07a70b83d18c/130989', { headers: strictHeaders });
-    const strictText = await strictResponse.text();
-    const strictContentType = strictResponse.headers.get('content-type');
-
-    return res.status(200).json({
-      message: "Debugging output",
-      idContext: idContext,
-      vidnestResponse: {
-        status: vidnestRes.status,
-        contentType: vidnestRes.headers && vidnestRes.headers.get('content-type'),
-        snippet: vidnestText.slice(0, 500)
-      },
-      strictFetchResult: {
-        status: strictResponse.status,
-        contentType: strictContentType,
-        snippet: strictText.slice(0, 500)
-      }
-    });
+    // Return the FULL Raw HTML
+    return res.status(200).send(html2);
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-  }
-                    
+}
