@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     const html = await response.text();
 
-    const match = html.match(/"file":"(https:\/\/[^"]*\.m3u8[^"]*)"/);
+    const match = html.match(/(https:\/\/[^\s"']+\.m3u8[^\s"']*)/);
 
     if (match && match[1]) {
       res.status(200).json({ success: true, streamUrl: match[1] });
