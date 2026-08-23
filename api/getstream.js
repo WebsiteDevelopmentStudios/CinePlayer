@@ -8,44 +8,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response1 = await fetch(`https://2embed.cc/embed/${imdb}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-      }
-    });
-
-    const html1 = await response1.text();
-
-    let match1 = html1.match(/data-src="(https:\/\/streamsrcs\.2embed\.cc\/[^"]+)"/);
-    
-    if (!match1 || !match1[1]) {
-      match1 = html1.match(/go\('(https:\/\/streamsrcs\.2embed\.cc\/vnest[^']+)'/);
-    }
-
-    if (!match1 || !match1[1]) {
-      return res.status(404).json({ error: "Could not find hidden iframe link on 2embed" });
-    }
-
-    const iframeUrl = match1[1];
-
-    const response2 = await fetch(iframeUrl, {
+    // Fetching from Embed.su
+    const response = await fetch(`https://embed.su/embed/movie/${imdb}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://2embed.cc/'
+        'Referer': 'https://embed.su/'
       }
     });
 
-    const html2 = await response2.text();
+    if (!response.ok) {
+      return res.status(404).json({ error: `Failed to reach Embed.su (Status: ${response.status})` });
+    }
 
-    // Let's return a 2000 character chunk of the inner page so we can see how they hide it
-    return res.status(200).json({ 
-      iframeUrl: iframeUrl,
-      innerHtmlLength: html2.length,
-      innerHtmlPreview: html2.substring(0, 2500) 
-    });
+    const html = await response.text();
+
+    // Check if .m3u8 is anywhere in the code
+    if (html.includes('.m3u8')) {
+      // Extract a 400 character snippet around the m3u8 link so we can see how they format it
+      const index = html.indexOf('.m3u8');
+      const snippet = html.substring(Math.max(0, index - 400), index + 400);
+      return res.status(200).json({ message: "Found .m3u8!", snippet: snippet });
+    } else {
+      return res.status(404).json({ error: "No m3u8 on Embed.su" });
+    }
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-  }
-      
+                                     }
+        
