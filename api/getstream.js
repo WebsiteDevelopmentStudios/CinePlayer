@@ -40,9 +40,8 @@ export default async function handler(req, res) {
     if (workerMatch && workerMatch[1]) {
       const innerUrl = decodeURIComponent(workerMatch[1]);
       
-      // STEP 4: Try fetching via cineby's proxy endpoint
-      const proxyUrl = `https://cineby.hair/_stream?url=${encodeURIComponent(innerUrl)}`;
-      const response3 = await fetch(proxyUrl, {
+      // STEP 4: Fetch the inner URL and return the FULL response
+      const response3 = await fetch(innerUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
           'Referer': 'https://cineby.hair/'
@@ -52,16 +51,10 @@ export default async function handler(req, res) {
       const contentType = response3.headers.get('content-type');
       const text3 = await response3.text();
 
-      // If it's an m3u8 file, return it directly
-      if (contentType.includes('mpegurl') || text3.trim().startsWith('#EXTM3U')) {
-        return res.status(200).json({ streamUrl: proxyUrl });
-      } 
-      
-      // Fallback: return a snippet so we can see what the proxy returned
       return res.status(200).json({ 
-        message: "Proxy URL did not return m3u8 directly", 
+        message: "Full inner URL response", 
         contentType: contentType,
-        snippet: text3.substring(0, 500)
+        fullText: text3
       });
 
     } else {
@@ -71,5 +64,5 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-        
+          }
+                                    
