@@ -33,50 +33,65 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // STEP 3: Search for any .m3u8 URL directly inside the cineby HTML
-    const m3u8Match = html2.match(/https?:\/\/[^"'\s\\]+\.m3u8[^"'\s\\]*/);
-    const m3u8Url = m3u8Match ? m3u8Match[0].replace(/\\\//g, '/') : null;
-
-    // STEP 4: Search for the Cloudflare Worker URL to see what it's attached to
+    // STEP 3: Search for the Cloudflare Worker URL to get the base host/path
     const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=([^\s"'\\]+)/);
     
-    let workerUrl = null;
-    let workerContext = null;
-    
-    if (workerMatch && workerMatch[1]) {
-      workerUrl = decodeURIComponent(workerMatch[1]);
-      // Grab 100 characters before and 200 after the worker URL to understand how it's embedded
-      const startIndex = workerMatch.index;
-      workerContext = html2.substring(Math.max(0, startIndex - 100), startIndex + workerMatch[0].length + 200);
+    if (!workerMatch || !workerMatch[1]) {
+      return res.status(404).json({ error: "Stream URL not found in HTML" });
     }
 
-    // STEP 5: Evaluate and return findings
-    if (m3u8Url) {
-      // If we find the direct m3u8, we are good to go!
+    const workerUrl = decodeURIComponent(workerMatch[1]); // e.g., https://fn.gaudsfervour.qpon/r1a02f07a70b83d18c/130989
+
+    // STEP 4: Try variations of appending m3u8 paths to the worker URL
+    const variations = [
+      `${workerUrl}/master.m3u8`,
+      `${workerUrl}.m3u8`,
+      `${workerUrl}/index.m3u8`
+    ];
+
+    const testResults = [];
+    let finalM3u8 = null;
+
+    for (const testUrl of variations) {
+      try {
+        const testRes = await fetch(testUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+            'Referer': movieUrl
+          }
+        });
+        const contentType = testRes.headers.get('content-type') || 'unknown';
+        const text = await testRes.text();
+        
+        testResults.push({ url: testUrl, status: testRes.status, contentType, snippet: text.slice(0, 100) });
+
+        // If we find an m3u8 playlist, we've found our stream!
+        if (contentType.includes('mpegurl') || text.trim().startsWith('#EXTM3U')) {
+          finalM3u8 = testUrl;
+          break; // Stop testing other variations
+        }
+      } catch (e) {
+        testResults.push({ url: testUrl, error: e.message });
+      }
+    }
+
+    if (finalM3u8) {
       return res.status(200).json({
         success: true,
-        streamUrl: m3u8Url,
-        message: "Direct m3u8 found on cineby.hair"
-      });
-    } else if (workerUrl) {
-      // If only the worker URL was found, return the context so we can debug
-      return res.status(200).json({
-        success: false,
-        message: "No direct m3u8 found, but worker URL exists inside a JS tag. Returning context to debug.",
-        movieUrl: movieUrl,
-        workerUrl: workerUrl,
-        workerContext: workerContext
+        streamUrl: finalM3u8,
+        message: "Successfully found .m3u8 by appending it to the URL"
       });
     } else {
-      return res.status(404).json({ 
-        success: false, 
-        error: "Neither m3u8 nor Worker Stream URL found in HTML",
-        movieUrl: movieUrl
+      return res.status(200).json({
+        success: false,
+        message: "Worker URL exists, but appending m3u8 variations did not trigger the playlist.",
+        baseWorkerUrl: workerUrl,
+        testResults: testResults
       });
     }
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-  }
-  
+          }
+                          
