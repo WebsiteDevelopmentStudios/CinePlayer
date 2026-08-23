@@ -5,6 +5,7 @@
   },
   "dependencies": {
     "@sparticuz/chromium": "^116.0.0",
-    "puppeteer-core": "^21.0.0"
+    "puppeteer-core": "^21.0.0",
+    "tar": "^6.2.1"
   }
 }
