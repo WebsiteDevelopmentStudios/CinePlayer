@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/getstream.js": {
-      "memory": 1024
+      "memory": 1024,
+      "maxDuration": 15
     }
   }
 }
