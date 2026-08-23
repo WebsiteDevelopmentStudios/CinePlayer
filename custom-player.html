@@ -3,109 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CinePlayer - Custom Player</title>
-    <style>
-        body { 
-            margin: 0; 
-            padding: 0; 
-            background: #000; 
-            overflow: hidden; 
-            height: 100vh; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-        }
-        video { 
-            width: 100%; 
-            height: 100%; 
-            outline: none; 
-            background: #000;
-        }
-        .status-text { 
-            color: #f1f1f1; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            font-size: 1.2rem; 
-            text-align: center;
-            padding: 20px;
-        }
-        .status-text.error {
-            color: #ff4d4d;
-        }
-    </style>
-    <!-- Load HLS.js to play .m3u8 streams -->
+    <title>CinePlayer Custom</title>
+    <!-- Include HLS.js to play .m3u8 streams -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { background: #111; color: #fff; text-align: center; font-family: Arial, sans-serif; padding-top: 40px; }
+        video { max-width: 90%; width: 800px; margin: 20px auto; display: block; }
+    </style>
 </head>
 <body>
-    <div class="status-text" id="status">Fetching stream...</div>
-    <video id="video" controls allowfullscreen style="display: none;"></video>
+    <h2 id="status">Fetching stream...</h2>
+    <video id="video" controls></video>
 
     <script>
-        const statusDiv = document.getElementById('status');
-        const video = document.getElementById('video');
-
-        // Get the IMDb ID from the URL (e.g., custom-player.html?id=tt1375666)
+        // 1. Grab IMDb ID from URL (?imdb=tt1375666). If missing, default to Mario movie.
         const urlParams = new URLSearchParams(window.location.search);
-        const imdbId = urlParams.get('imdb') || 'tt6718170';
+        const imdbId = urlParams.get('imdb') || 'tt6718170'; 
 
-        if (!imdbId) {
-            statusDiv.innerText = "Error: No IMDb ID provided in URL.";
-            statusDiv.classList.add('error');
-        } else {
-            // Ask your Vercel API for the stream
-            const apiUrl = `/api/getstream?imdb=${imdbId}`;
-
-            fetch(apiUrl)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.streamUrl) {
-                        loadVideo(data.streamUrl);
-                    } else {
-                        statusDiv.innerText = "Stream not found. The scraper might need updating.";
-                        statusDiv.classList.add('error');
-                    }
-                })
-                .catch(error => {
-                    statusDiv.innerText = "Error connecting to the API.";
-                    statusDiv.classList.add('error');
-                    console.error("Fetch error:", error);
-                });
-        }
-
-        function loadVideo(streamUrl) {
-            statusDiv.innerText = "Loading video player...";
+        async function loadStream() {
+            document.getElementById('status').innerText = 'Contacting server for IMDb: ' + imdbId;
             
-            // Hide status text, show video element
-            statusDiv.style.display = 'none';
-            video.style.display = 'block';
+            try {
+                // 2. Fetch from your Vercel API
+                const res = await fetch(`/api/getstream?imdb=${imdbId}`);
+                const data = await res.json();
 
-            // Handle HLS playback
-            if (Hls.isSupported()) {
-                const hls = new Hls();
-                hls.loadSource(streamUrl);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    video.play().catch(e => console.log("Autoplay blocked:", e));
-                });
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                    if (data.fatal) {
-                        statusDiv.style.display = 'block';
-                        statusDiv.innerText = "Error loading video stream. Link might be dead.";
-                        statusDiv.classList.add('error');
+                // 3. Handle the response
+                if (data.success && data.streamUrl) {
+                    document.getElementById('status').innerText = 'Now Playing...';
+                    
+                    const video = document.getElementById('video');
+                    if (Hls.isSupported()) {
+                        const hls = new Hls();
+                        hls.loadSource(data.streamUrl);
+                        hls.attachMedia(video);
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = data.streamUrl;
                     }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Native HLS support (Safari/iOS)
-                video.src = streamUrl;
-                video.addEventListener('loadedmetadata', function() {
-                    video.play().catch(e => console.log("Autoplay blocked:", e));
-                });
-            } else {
-                statusDiv.style.display = 'block';
-                statusDiv.innerText = "Your browser does not support HLS playback.";
-                statusDiv.classList.add('error');
+                } else {
+                    document.getElementById('status').innerText = 'Error: ' + (data.error || 'Stream not found');
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = 'Error fetching API.';
+                console.error(err);
             }
         }
+
+        loadStream();
     </script>
 </body>
-  </html>
-  
+</html>
