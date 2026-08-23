@@ -38,11 +38,7 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error("Scraping error:", error);
-    res.status(500).json({ error: "Failed to scrape stream" });
+    // Return the exact error message so we can see it in the browser
+    res.status(500).json({ error: "Crash reason: " + error.message }); 
   }
-}
-  } catch (error) {
-    console.error("Scraping error:", error);
-    res.status(500).json({ error: "Failed to scrape stream" });
-  }
-}
+
