@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/getstream.js": {
+      "memory": 1024
+    }
+  }
+}
