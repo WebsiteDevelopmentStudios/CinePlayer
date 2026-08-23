@@ -18,14 +18,39 @@ export default async function handler(req, res) {
 
     const html1 = await response1.text();
 
-    // Let's return a snippet of the 2embed HTML to see what's there
-    const tmdbIndex = html1.indexOf('tmdb');
-    const snippet1 = tmdbIndex !== -1 ? html1.substring(Math.max(0, tmdbIndex - 200), tmdbIndex + 200) : html1.substring(0, 500);
+    const tmdbMatch = html1.match(/tmdb=(\d+)/);
+    if (!tmdbMatch || !tmdbMatch[1]) {
+      return res.status(404).json({ error: "Could not find TMDB ID on 2embed" });
+    }
+    const tmdbId = tmdbMatch[1];
 
-    return res.status(200).json({ 
-      message: "2embed HTML snippet",
-      snippet: snippet1
+    // STEP 2: Fetch cineby.hair using the TMDB ID
+    const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': 'https://cineby.hair/'
+      }
     });
+
+    const html2 = await response2.text();
+
+    // STEP 3: Extract __NEXT_DATA__ JSON
+    const nextDataMatch = html2.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/);
+    
+    if (nextDataMatch && nextDataMatch[1]) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+        // Return the whole object so we can inspect it
+        return res.status(200).json({ 
+          message: "Found __NEXT_DATA__",
+          data: nextData
+        });
+      } catch (e) {
+        return res.status(500).json({ error: "Failed to parse __NEXT_DATA__ JSON" });
+      }
+    } else {
+      return res.status(404).json({ error: "Could not find __NEXT_DATA__" });
+    }
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
