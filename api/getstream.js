@@ -16,6 +16,7 @@ export default async function handler(req, res) {
   }
   
   let browser = null;
+  let diagnostics = {};
   
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
@@ -35,12 +36,15 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // DEBUGGING: Check if our libs folder exists and what architecture Lambda is using
-    console.log("Arch:", process.arch);
-    console.log("Libs path exists:", fs.existsSync(libsPath));
+    // DIAGNOSTICS GATHERING
+    let libsContent = [];
     if (fs.existsSync(libsPath)) {
-      console.log("Libs folder contents:", fs.readdirSync(libsPath));
+      libsContent = fs.readdirSync(libsPath);
     }
+    diagnostics.arch = process.arch;
+    diagnostics.libsPathExists = fs.existsSync(libsPath);
+    diagnostics.libsFolderContents = libsContent;
+    diagnostics.libsPathValue = libsPath;
 
     // STEP 2: Launch Headless Browser
     browser = await puppeteer.launch({
@@ -81,7 +85,10 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     if (browser) await browser.close();
-    return res.status(500).json({ error: "Crash reason: " + error.message });
+    return res.status(500).json({ 
+      error: "Crash reason: " + error.message,
+      diagnostics: diagnostics
+    });
   }
-  }
-      
+        }
+        
