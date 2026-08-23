@@ -22,52 +22,57 @@ export default async function handler(req, res) {
     }
 
     const tmdbId = tmdbMatch[1];
+    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
 
-    // STEP 2: Try the Vidnest.fun API directly to bypass the cineby.hair anti-bot mess
-    const vidnestApiUrl = `https://vidnest.fun/api/source/movie/${tmdbId}`;
-    
-    const vidnestRes = await fetch(vidnestApiUrl, {
+    // STEP 2: Fetch cineby.hair using the TMDB ID
+    const response2 = await fetch(movieUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://cineby.hair/',
-        'Accept': 'application/json',
-        'Origin': 'https://vidnest.fun'
+        'Referer': 'https://cineby.hair/'
       }
     });
+    const html2 = await response2.text();
 
-    const vidnestStatus = vidnestRes.status;
-    const vidnestContentType = vidnestRes.headers.get('content-type') || 'unknown';
-    const vidnestText = await vidnestRes.text();
+    // STEP 3: Extract all Next.js script chunk URLs
+    const scriptUrls = [...new Set(html2.match(/\/_next\/static\/chunks\/[^"'\s]+\.js/g) || [])];
+    const absoluteScriptUrls = scriptUrls.map(url => `https://cineby.hair${url}`);
 
-    // Check if the response is JSON and contains an m3u8
-    let parsedJson = null;
-    let foundM3u8 = null;
-    
-    if (vidnestContentType.includes('application/json')) {
-      try {
-        parsedJson = JSON.parse(vidnestText);
-        // Convert JSON to string to search for m3u8 deep inside the object
-        const jsonStr = JSON.stringify(parsedJson);
-        const m3u8Match = jsonStr.match(/https?:\/\/[^"]+\.m3u8[^"]*/);
-        if (m3u8Match && m3u8Match[0]) {
-          foundM3u8 = m3u8Match[0].replace(/\\\//g, '/'); // Unescape slashes if needed
+    // STEP 4: Search the first 5 large chunks for "m3u8" or "_stream"
+    const searchResults = [];
+    const limit = Math.min(absoluteScriptUrls.length, 10); // Check first 10 chunks
+
+    for (let i = 0; i < limit; i++) {
+      const url = absoluteScriptUrls[i];
+      const scriptRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          'Referer': movieUrl
         }
-      } catch (e) {}
+      });
+      const scriptText = await scriptRes.text();
+      
+      // We only care about strings that contain m3u8 or stream configuration
+      if (scriptText.includes('m3u8') || scriptText.includes('/api/') || scriptText.includes('vidnest')) {
+        // Extract the API endpoint URLs from the JS
+        const apiMatches = [...new Set(scriptText.match(/["'](\/api\/[^"'\s]+)["']/g) || [])];
+        
+        searchResults.push({
+          chunkUrl: url,
+          foundKeywords: true,
+          apiEndpoints: apiMatches.slice(0, 5) // Limit to 5 results per chunk
+        });
+      }
     }
 
     return res.status(200).json({
-      success: foundM3u8 ? true : false,
-      message: foundM3u8 ? "Found m3u8 via Vidnest API!" : "Vidnest API did not return a direct stream. We'll need a headless browser next.",
+      message: "Extracted API routes from Next.js JS chunks",
       tmdbId: tmdbId,
-      vidnestApiUrl: vidnestApiUrl,
-      vidnestStatus: vidnestStatus,
-      vidnestContentType: vidnestContentType,
-      foundM3u8: foundM3u8,
-      apiResponseSnippet: vidnestText.slice(0, 1000) // Show us what it returned
+      scriptChunksFound: absoluteScriptUrls.length,
+      searchResults: searchResults
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-  }
-  
+      }
+        
