@@ -38,8 +38,37 @@ export default async function handler(req, res) {
     const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=[^\s"'\\]+/);
     
     if (workerMatch && workerMatch[0]) {
-      const streamUrl = workerMatch[0];
-      return res.status(200).json({ streamUrl });
+      const workerUrl = workerMatch[0];
+      
+      // STEP 4: Fetch the worker URL to see what it returns
+      const response3 = await fetch(workerUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          'Referer': 'https://cineby.hair/'
+        }
+      });
+
+      const contentType = response3.headers.get('content-type');
+      const text3 = await response3.text();
+
+      // If it's an m3u8 file, return it directly
+      if (contentType.includes('mpegurl') || text3.trim().startsWith('#EXTM3U')) {
+        return res.status(200).json({ streamUrl: workerUrl });
+      } 
+      
+      // If it's HTML or something else, let's look for an m3u8 link inside it
+      const m3u8Match = text3.match(/https?:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*/);
+      if (m3u8Match && m3u8Match[0]) {
+        return res.status(200).json({ streamUrl: m3u8Match[0] });
+      }
+
+      // Fallback: return a snippet so we can see what the worker returned
+      return res.status(200).json({ 
+        message: "Worker URL did not return m3u8 directly", 
+        contentType: contentType,
+        snippet: text3.substring(0, 500)
+      });
+
     } else {
       return res.status(404).json({ error: "Stream URL not found in HTML" });
     }
@@ -48,4 +77,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
       }
-      
+                                    
