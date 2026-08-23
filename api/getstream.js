@@ -1,7 +1,3 @@
-import chromium from '@sparticuz/chromium';
-import nss from '@sparticuz/nss';
-import puppeteer from 'puppeteer-core';
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { imdb } = req.query;
@@ -9,8 +5,6 @@ export default async function handler(req, res) {
   if (!imdb) {
     return res.status(400).json({ error: "No IMDb ID provided" });
   }
-  
-  let browser = null;
   
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
@@ -30,48 +24,34 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Load missing libraries for Node 20
-    await nss.load();
-
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      env: {
-        ...process.env,
-        // Point the environment variables to the newly loaded libraries
-        LD_LIBRARY_PATH: `${nss.path}:${process.env.LD_LIBRARY_PATH || ''}`,
-      },
-    });
-    
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
-    
-    let foundStreamUrl = null;
-    
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const url = request.url();
-      if (url.includes('.m3u8') && !url.includes('cineby.hair/_stream')) {
-        foundStreamUrl = url;
+    // STEP 2: Fetch the movie page natively (No headless browser needed!)
+    const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': 'https://cineby.hair/'
       }
-      request.continue();
     });
-
-    // STEP 3: Navigate to the movie page
-    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
-    await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
     
-    await browser.close();
+    const html2 = await response2.text();
 
-    // STEP 4: Return the intercepted URL
-    if (foundStreamUrl) {
-      return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
+    // STEP 3: Search for the m3u8 URL inside the returned HTML/Next.js payload
+    // This regex looks for any URL ending in .m3u8
+    const match = html2.match(/https?:\/\/[^"'\s]+\.m3u8[^"'\s]*/);
+    
+    if (match && match[0]) {
+      return res.status(200).json({ 
+        success: true, 
+        streamUrl: match[0] 
+      });
     } else {
-      return res.status(404).json({ success: false, error: "Timeout or could not bypass anti-bot." });
+      // If it's not in the HTML, it means the site generates it dynamically with deeper JavaScript
+      return res.status(404).json({ 
+        success: false, 
+        error: "m3u8 link not found in HTML. Dynamic JS execution might still be required." 
+      });
     }
   } catch (error) {
-    if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-                    }
+}
+  
