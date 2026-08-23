@@ -3,53 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CinePlayer Custom</title>
-    <!-- Include HLS.js to play .m3u8 streams -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <title>CinePlayer - Custom</title>
     <style>
-        body { background: #111; color: #fff; text-align: center; font-family: Arial, sans-serif; padding-top: 40px; }
-        video { max-width: 90%; width: 800px; margin: 20px auto; display: block; }
+        body { 
+            margin: 0; 
+            background: #000; 
+            color: #fff; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+        #video { 
+            width: 100%; 
+            height: 100%; 
+            background: #000;
+        }
+        #status { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            text-align: center;
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
-    <h2 id="status">Fetching stream...</h2>
-    <video id="video" controls></video>
+    <div id="status">Fetching stream...</div>
+    <video id="video" controls autoplay playsinline></video>
 
+    <!-- Load HLS.js to play .m3u8 streams -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        // 1. Grab IMDb ID from URL (?imdb=tt1375666). If missing, default to Mario movie.
-        const urlParams = new URLSearchParams(window.location.search);
-        const imdbId = urlParams.get('imdb') || 'tt6718170'; 
+        const params = new URLSearchParams(window.location.search);
+        const imdb = params.get('imdb');
 
-        async function loadStream() {
-            document.getElementById('status').innerText = 'Contacting server for IMDb: ' + imdbId;
-            
-            try {
-                // 2. Fetch from your Vercel API
-                const res = await fetch(`/api/getstream?imdb=${imdbId}`);
-                const data = await res.json();
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
 
-                // 3. Handle the response
-                if (data.success && data.streamUrl) {
-                    document.getElementById('status').innerText = 'Now Playing...';
-                    
-                    const video = document.getElementById('video');
-                    if (Hls.isSupported()) {
-                        const hls = new Hls();
-                        hls.loadSource(data.streamUrl);
-                        hls.attachMedia(video);
-                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                        video.src = data.streamUrl;
+        if (!imdb) {
+            status.innerText = "Error: No IMDb ID provided in URL.";
+        } else {
+            // Call your serverless function to get the stream URL
+            // If your API is hosted on a different domain, replace '/api/getstream' with the full URL (e.g., 'https://your-vercel-app.vercel.app/api/getstream')
+            fetch(`/api/getstream?imdb=${imdb}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.streamUrl) {
+                        status.style.display = 'none';
+                        
+                        // If the browser supports HLS natively (Safari, iOS)
+                        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                            video.src = data.streamUrl;
+                            video.addEventListener('loadedmetadata', function() {
+                                video.play();
+                            });
+                        } 
+                        // For Chrome, Firefox, etc. use hls.js
+                        else if (Hls.isSupported()) {
+                            const hls = new Hls();
+                            hls.loadSource(data.streamUrl);
+                            hls.attachMedia(video);
+                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                                video.play();
+                            });
+                        } else {
+                            status.innerText = "Error: Your browser does not support HLS playback.";
+                            status.style.display = 'block';
+                        }
+                    } else {
+                        status.innerText = "Error: " + (data.error || "Stream not found.");
                     }
-                } else {
-                    document.getElementById('status').innerText = 'Error: ' + (data.error || 'Stream not found');
-                }
-            } catch (err) {
-                document.getElementById('status').innerText = 'Error fetching API.';
-                console.error(err);
-            }
+                })
+                .catch(err => {
+                    status.innerText = "Error: " + err.message;
+                    status.style.display = 'block';
+                });
         }
-
-        loadStream();
     </script>
 </body>
-</html>
+    </html>
+    
