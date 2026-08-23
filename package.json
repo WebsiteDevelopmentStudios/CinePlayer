@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "postinstall": "mkdir -p libs && cp /usr/lib64/libnss3.so /usr/lib64/libnssutil3.so /usr/lib64/libsmime3.so /usr/lib64/libssl3.so /usr/lib64/libnspr4.so /usr/lib64/libplc4.so /usr/lib64/libplds4.so libs/ 2>/dev/null; cp /usr/lib/x86_64-linux-gnu/libnss3.so /usr/lib/x86_64-linux-gnu/libnssutil3.so /usr/lib/x86_64-linux-gnu/libsmime3.so /usr/lib/x86_64-linux-gnu/libssl3.so /usr/lib/x86_64-linux-gnu/libnspr4.so /usr/lib/x86_64-linux-gnu/libplc4.so /usr/lib/x86_64-linux-gnu/libplds4.so libs/ 2>/dev/null; echo 'Libraries copied.'"
+    "postinstall": "mkdir -p api/libs && cp /usr/lib64/libnss3.so /usr/lib64/libnssutil3.so /usr/lib64/libsmime3.so /usr/lib64/libssl3.so /usr/lib64/libnspr4.so /usr/lib64/libplc4.so /usr/lib64/libplds4.so api/libs/ 2>/dev/null; cp /usr/lib/x86_64-linux-gnu/libnss3.so /usr/lib/x86_64-linux-gnu/libnssutil3.so /usr/lib/x86_64-linux-gnu/libsmime3.so /usr/lib/x86_64-linux-gnu/libssl3.so /usr/lib/x86_64-linux-gnu/libnspr4.so /usr/lib/x86_64-linux-gnu/libplc4.so /usr/lib/x86_64-linux-gnu/libplds4.so api/libs/ 2>/dev/null; echo 'Libraries copied.'"
   },
   "engines": {
     "node": "20.x"
