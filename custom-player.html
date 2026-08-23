@@ -28,6 +28,7 @@
             transform: translate(-50%, -50%); 
             text-align: center;
             font-size: 1.2rem;
+            max-width: 80%;
         }
     </style>
 </head>
@@ -47,33 +48,43 @@
         if (!imdb) {
             status.innerText = "Error: No IMDb ID provided in URL.";
         } else {
-            // Call your serverless function to get the stream URL
-            // If your API is hosted on a different domain, replace '/api/getstream' with the full URL (e.g., 'https://your-vercel-app.vercel.app/api/getstream')
             fetch(`/api/getstream?imdb=${imdb}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.streamUrl) {
                         status.style.display = 'none';
+                        const streamUrl = data.streamUrl;
+
+                        // 1. Try native playback first (works for direct mp4s and Safari HLS)
+                        video.src = streamUrl;
                         
-                        // If the browser supports HLS natively (Safari, iOS)
-                        if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                            video.src = data.streamUrl;
-                            video.addEventListener('loadedmetadata', function() {
-                                video.play();
-                            });
-                        } 
-                        // For Chrome, Firefox, etc. use hls.js
-                        else if (Hls.isSupported()) {
-                            const hls = new Hls();
-                            hls.loadSource(data.streamUrl);
-                            hls.attachMedia(video);
-                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                                video.play();
-                            });
-                        } else {
-                            status.innerText = "Error: Your browser does not support HLS playback.";
-                            status.style.display = 'block';
-                        }
+                        video.addEventListener('error', function() {
+                            // 2. If native fails, try HLS.js
+                            if (Hls.isSupported()) {
+                                const hls = new Hls();
+                                hls.loadSource(streamUrl);
+                                hls.attachMedia(video);
+                                
+                                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                                    video.play();
+                                });
+
+                                hls.on(Hls.Events.ERROR, function(event, data) {
+                                    console.error('HLS Error:', data);
+                                    status.innerText = "Stream Error: " + data.details + "\n\nURL: " + streamUrl;
+                                    status.style.display = 'block';
+                                });
+                            } else {
+                                status.innerText = "Error: Your browser does not support this stream.";
+                                status.style.display = 'block';
+                            }
+                        });
+
+                        video.play().catch(e => {
+                            // Autoplay might be blocked, but the user can press play
+                            console.log("Autoplay blocked:", e);
+                        });
+
                     } else {
                         status.innerText = "Error: " + (data.error || "Stream not found.");
                     }
@@ -85,5 +96,4 @@
         }
     </script>
 </body>
-    </html>
-    
+</html>
