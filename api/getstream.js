@@ -8,7 +8,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Using the confirmed LIVE domain: vidsrc2.ru
     const response = await fetch(`https://vidsrc2.ru/embed/movie/${imdb}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
@@ -24,15 +23,18 @@ export default async function handler(req, res) {
 
     const html = await response.text();
 
-    // Search for any https link containing .m3u8 in the HTML
-    const match = html.match(/(https:\/\/[^\s"'<>]+\.m3u8[^\s"'<>]*)/);
-
-    if (match && match[1]) {
-      res.status(200).json({ success: true, streamUrl: match[1] });
-    } else {
-      res.status(404).json({ error: "Stream link not found in HTML" });
+    // Let's return a chunk of the HTML so we can see exactly what Vercel is downloading
+    if (html.length === 0) {
+      return res.status(404).json({ error: "Page returned empty HTML" });
     }
+
+    // Return the first 2000 characters of the HTML so we can inspect it
+    res.status(200).json({ 
+      success: false, 
+      htmlPreview: html.substring(0, 2000) 
+    });
+
   } catch (error) {
     res.status(500).json({ error: "Crash reason: " + error.message });
   }
-        }                                                                       
+}
