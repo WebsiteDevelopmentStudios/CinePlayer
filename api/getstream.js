@@ -35,13 +35,13 @@ export default async function handler(req, res) {
     const html2 = await response2.text();
 
     // STEP 3: Search for the Cloudflare Worker stream URL
-    const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=[^\s"'\\]+/);
+    const workerMatch = html2.match(/https:\/\/fetch\.streaming-1\.workers\.dev\/fetch\?url=([^\s"'\\]+)/);
     
-    if (workerMatch && workerMatch[0]) {
-      const workerUrl = workerMatch[0];
+    if (workerMatch && workerMatch[1]) {
+      const innerUrl = decodeURIComponent(workerMatch[1]);
       
-      // STEP 4: Fetch the worker URL to see what it returns
-      const response3 = await fetch(workerUrl, {
+      // STEP 4: Fetch the inner URL directly
+      const response3 = await fetch(innerUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
           'Referer': 'https://cineby.hair/'
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
       // If it's an m3u8 file, return it directly
       if (contentType.includes('mpegurl') || text3.trim().startsWith('#EXTM3U')) {
-        return res.status(200).json({ streamUrl: workerUrl });
+        return res.status(200).json({ streamUrl: innerUrl });
       } 
       
       // If it's HTML or something else, let's look for an m3u8 link inside it
@@ -62,9 +62,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ streamUrl: m3u8Match[0] });
       }
 
-      // Fallback: return a snippet so we can see what the worker returned
+      // Fallback: return a snippet so we can see what the inner URL returned
       return res.status(200).json({ 
-        message: "Worker URL did not return m3u8 directly", 
+        message: "Inner URL did not return m3u8 directly", 
         contentType: contentType,
         snippet: text3.substring(0, 500)
       });
@@ -76,5 +76,5 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-                                    
+          }
+      
