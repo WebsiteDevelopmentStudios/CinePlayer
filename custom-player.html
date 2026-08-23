@@ -45,7 +45,7 @@
 
         // Get the IMDb ID from the URL (e.g., custom-player.html?id=tt1375666)
         const urlParams = new URLSearchParams(window.location.search);
-         const imdbId = 'tt6718170';
+        const imdbId = urlParams.get('imdb') || 'tt6718170';
 
         if (!imdbId) {
             statusDiv.innerText = "Error: No IMDb ID provided in URL.";
