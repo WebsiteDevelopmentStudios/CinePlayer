@@ -10,4 +10,4 @@ export default async function handler(req, res) {
     streamUrl: "https://test.com/video.m3u8",
     message: "API is working! Received: " + imdb 
   });
-}
+ }
