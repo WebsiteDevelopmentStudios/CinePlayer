@@ -18,42 +18,16 @@ export default async function handler(req, res) {
 
     const html1 = await response1.text();
 
-    const tmdbMatch = html1.match(/tmdb=(\d+)/);
-    if (!tmdbMatch || !tmdbMatch[1]) {
-      return res.status(404).json({ error: "Could not find TMDB ID on 2embed" });
-    }
-    const tmdbId = tmdbMatch[1];
-
-    // STEP 2: Fetch cineby.hair using the TMDB ID
-    const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://cineby.hair/'
-      }
-    });
-
-    const html2 = await response2.text();
-
-    // STEP 3: Extract all script src tags
-    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/g;
-    let scripts = [];
-    let match;
-    while ((match = scriptSrcRegex.exec(html2)) !== null) {
-      scripts.push(match[1]);
-    }
-
-    // STEP 4: Look for JSON data or window variables
-    const jsonMatches = html2.match(/\{[^{}]*"sources"[^{}]*\}/g) || [];
-    const windowMatches = html2.match(/window\.[a-zA-Z_]+\s*=\s*[^;]+/g) || [];
+    // Let's return a snippet of the 2embed HTML to see what's there
+    const tmdbIndex = html1.indexOf('tmdb');
+    const snippet1 = tmdbIndex !== -1 ? html1.substring(Math.max(0, tmdbIndex - 200), tmdbIndex + 200) : html1.substring(0, 500);
 
     return res.status(200).json({ 
-      message: "Extracted scripts and data",
-      scripts: scripts,
-      jsonMatches: jsonMatches,
-      windowMatches: windowMatches
+      message: "2embed HTML snippet",
+      snippet: snippet1
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-    }
+}
