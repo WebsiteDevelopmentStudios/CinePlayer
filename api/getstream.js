@@ -1,8 +1,11 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-import { execSync } from 'child_process';
-import fs from 'fs';
-import tar from 'tar';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Path to the NPM package's .so files
+const nssPath = path.join(__dirname, '..', 'node_modules', 'aws-lambda-libnss3', 'lib');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -32,35 +35,15 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Fix Amazon Linux 2023 (Node 20) missing libraries automatically using pure JS
-    if (!fs.existsSync('/tmp/libnss3.so')) {
-      console.log("Downloading missing nss libraries for Node 20...");
-      const nssRes = await fetch('https://github.com/ultrasecurity/nss-shared-libaries/raw/main/nss_libs.tar.gz');
-      const nssBuffer = Buffer.from(await nssRes.arrayBuffer());
-      
-      await tar.x({
-        file: '', // We pass the buffer instead
-        C: '/tmp/',
-        strict: true
-      });
-      // Since tar doesn't accept a Buffer directly in `file` easily, we write it first
-      fs.writeFileSync('/tmp/nss.tar.gz', nssBuffer);
-      await tar.x({
-        file: '/tmp/nss.tar.gz',
-        C: '/tmp/',
-        strict: true
-      });
-      console.log("Libraries extracted successfully.");
-    }
-
-    // STEP 3: Launch Headless Browser
+    // STEP 2: Launch Headless Browser (No downloads needed, using NPM package)
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       env: {
         ...process.env,
-        LD_LIBRARY_PATH: `/tmp:${process.env.LD_LIBRARY_PATH || ''}`,
+        // Point Linux to our NPM package's library folder
+        LD_LIBRARY_PATH: `${nssPath}:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
     
@@ -78,13 +61,13 @@ export default async function handler(req, res) {
       request.continue();
     });
 
-    // STEP 4: Navigate to the movie page
+    // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
     
     await browser.close();
 
-    // STEP 5: Return the intercepted URL
+    // STEP 4: Return the intercepted URL
     if (foundStreamUrl) {
       return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
@@ -94,5 +77,5 @@ export default async function handler(req, res) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-        }
-      
+      }
+                                       
