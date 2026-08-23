@@ -1,11 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Path to the NPM package's .so files
-const nssPath = path.join(__dirname, '..', 'node_modules', 'aws-lambda-libnss3', 'lib');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -35,15 +30,15 @@ export default async function handler(req, res) {
     
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Launch Headless Browser (No downloads needed, using NPM package)
+    // STEP 2: Launch Headless Browser using files copied at build time
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       env: {
         ...process.env,
-        // Point Linux to our NPM package's library folder
-        LD_LIBRARY_PATH: `${nssPath}:${process.env.LD_LIBRARY_PATH || ''}`,
+        // Point Linux to our local libs folder
+        LD_LIBRARY_PATH: `${path.join(process.cwd(), 'libs')}:${process.env.LD_LIBRARY_PATH || ''}`,
       },
     });
     
@@ -77,5 +72,4 @@ export default async function handler(req, res) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-                                       
+    }
