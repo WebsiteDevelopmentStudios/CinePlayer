@@ -24,7 +24,38 @@ export default async function handler(req, res) {
     const tmdbId = tmdbMatch[1];
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
 
-    // STEP 2: Fetch cineby.hair using the TMDB ID
+    // STEP 2: Test common Next.js API endpoints to bypass the frontend entirely
+    const apiVariations = [
+      `https://cineby.hair/api/source/${tmdbId}`,
+      `https://cineby.hair/api/sources/${tmdbId}`,
+      `https://cineby.hair/api/movie/${tmdbId}`,
+      `https://cineby.hair/api/movies/${tmdbId}`,
+      `https://cineby.hair/api/stream/${tmdbId}`
+    ];
+
+    const apiResults = [];
+
+    for (const apiUrl of apiVariations) {
+      const apiRes = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          'Referer': movieUrl,
+          'Accept': 'application/json'
+        }
+      });
+      
+      const contentType = apiRes.headers.get('content-type') || 'unknown';
+      const text = await apiRes.text();
+      
+      apiResults.push({
+        url: apiUrl,
+        status: apiRes.status,
+        contentType: contentType,
+        snippet: text.slice(0, 200)
+      });
+    }
+
+    // STEP 3: Try fetching the HTML 1 more time and hunt deep for "playlist" or "file"
     const response2 = await fetch(movieUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
@@ -33,38 +64,21 @@ export default async function handler(req, res) {
     });
     const html2 = await response2.text();
 
-    // STEP 3: Find direct m3u8 URLs if any exist
-    const streamUrlRegex = /https?:\/\/[^"'\s\\]+\.m3u8[^"'\s\\]*/g;
-    const directStreams = [...new Set(html2.match(streamUrlRegex) || [])];
-
-    // STEP 4: Extract specific chunk of code around "vidnest.fun" and "_stream?url="
-    const vidnestIndex = html2.indexOf('vidnest.fun');
-    const _streamIndex = html2.indexOf('_stream?url=');
-
-    let vidnestContext = "";
-    if (vidnestIndex !== -1) {
-      vidnestContext = html2.substring(Math.max(0, vidnestIndex - 500), vidnestIndex + 500);
-    }
-
-    let _streamContext = "";
-    if (_streamIndex !== -1) {
-      _streamContext = html2.substring(Math.max(0, _streamIndex - 500), _streamIndex + 500);
-    }
-    
-    // STEP 5: Hunt for JSON properties that might contain the stream source
-    // e.g., "streamUrl":"https://...", "source":"...", "m3u8":"..."
-    const streamPropMatch = html2.match(/"(?:streamUrl|source|sources|src|m3u8|file|playlist)"\s*:\s*("[^"]+"|\[[^\]]+\])/g);
+    // Search for UP_HOST to understand what host the proxy is actually proxying to
+    const upHostMatch = html2.match(/UP_HOST\s*=\s*['"]([^'"]+)['"]/);
+    const myHostMatch = html2.match(/MY_HOST\s*=\s*['"]([^'"]+)['"]/);
 
     return res.status(200).json({
-      message: "Deep HTML context extraction",
-      directM3u8Urls: directStreams,
-      vidnestContext: vidnestContext,
-      _streamContext: _streamContext,
-      streamProperties: streamPropMatch
+      message: "API Endpoint tests and variable extraction",
+      apiResults: apiResults,
+      proxyVariables: {
+        UP_HOST: upHostMatch ? upHostMatch[1] : null,
+        MY_HOST: myHostMatch ? myHostMatch[1] : null
+      }
     });
 
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-  }
-        
+        }
+            
