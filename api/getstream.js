@@ -1,16 +1,17 @@
 import chromium from '@sparticuz/chromium';
+import nss from '@sparticuz/nss';
 import puppeteer from 'puppeteer-core';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { imdb } = req.query;
-
+  
   if (!imdb) {
     return res.status(400).json({ error: "No IMDb ID provided" });
   }
-
+  
   let browser = null;
-
+  
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
     const response1 = await fetch(`https://2embed.cc/embed/${imdb}`, {
@@ -19,29 +20,36 @@ export default async function handler(req, res) {
         'Referer': 'https://2embed.cc/'
       }
     });
+    
     const html1 = await response1.text();
     const tmdbMatch = html1.match(/tmdb=(\d+)/);
-
+    
     if (!tmdbMatch || !tmdbMatch[1]) {
       return res.status(404).json({ error: "Could not find TMDB ID on 2embed" });
     }
-
+    
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Launch Headless Browser
+    // STEP 2: Load missing libraries for Node 20
+    await nss.load();
+
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
+      env: {
+        ...process.env,
+        // Point the environment variables to the newly loaded libraries
+        LD_LIBRARY_PATH: `${nss.path}:${process.env.LD_LIBRARY_PATH || ''}`,
+      },
     });
-
+    
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
-
-    let foundStreamUrl = null;
-
-    await page.setRequestInterception(true);
     
+    let foundStreamUrl = null;
+    
+    await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
       if (url.includes('.m3u8') && !url.includes('cineby.hair/_stream')) {
@@ -53,25 +61,17 @@ export default async function handler(req, res) {
     // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
-
+    
     await browser.close();
 
     // STEP 4: Return the intercepted URL
     if (foundStreamUrl) {
-      return res.status(200).json({
-        success: true,
-        streamUrl: foundStreamUrl
-      });
+      return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
-      return res.status(404).json({
-        success: false,
-        error: "Timeout or could not bypass anti-bot."
-      });
+      return res.status(404).json({ success: false, error: "Timeout or could not bypass anti-bot." });
     }
-
   } catch (error) {
     if (browser) await browser.close();
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-      }
-      
+                    }
