@@ -11,7 +11,8 @@ export default async function handler(req, res) {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
     const response1 = await fetch(`https://2embed.cc/embed/${imdb}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': 'https://2embed.cc/'
       }
     });
 
@@ -26,7 +27,8 @@ export default async function handler(req, res) {
     // STEP 2: Fetch cineby.hair using the TMDB ID
     const response2 = await fetch(`https://cineby.hair/movie/${tmdbId}?autostart=true`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Referer': 'https://cineby.hair/'
       }
     });
 
@@ -44,4 +46,4 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: "Crash reason: " + error.message });
   }
-}
+    }
