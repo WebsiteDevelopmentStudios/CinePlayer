@@ -1,6 +1,5 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-// We removed fs and tar since we don't need them anymore
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,7 +10,7 @@ export default async function handler(req, res) {
   }
 
   let browser = null;
-  
+
   try {
     // STEP 1: Fetch 2embed.cc to find the TMDB ID
     const response1 = await fetch(`https://2embed.cc/embed/${imdb}`, {
@@ -30,17 +29,17 @@ export default async function handler(req, res) {
 
     const tmdbId = tmdbMatch[1];
 
-    // STEP 2: Launch Headless Browser (Skipping NSS download entirely)
+    // STEP 2: Launch Headless Browser (Merged with the safe ChatGPT version)
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      // Removed the env LD_LIBRARY_PATH part
+      headless: true,
+      defaultViewport: chromium.defaultViewport,
     });
 
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
-    
+
     let foundStreamUrl = null;
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -53,18 +52,35 @@ export default async function handler(req, res) {
 
     // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
-    await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {});
+    await page.goto(movieUrl, {
+      waitUntil: 'networkidle2',
+      timeout: 12000
+    }).catch(() => {});
+
     await browser.close();
+    browser = null;
 
     // STEP 4: Return the intercepted URL
     if (foundStreamUrl) {
-      return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
+      return res.status(200).json({
+        success: true,
+        streamUrl: foundStreamUrl
+      });
     } else {
-      return res.status(404).json({ success: false, error: "Timeout or could not bypass anti-bot." });
+      return res.status(404).json({
+        success: false,
+        error: "Timeout or could not bypass anti-bot."
+      });
     }
 
   } catch (error) {
-    if (browser) await browser.close();
-    return res.status(500).json({ error: "Crash reason: " + error.message });
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+
+    return res.status(500).json({
+      error: 'Chromium crash reason: ' + error.message
+    });
   }
       }
+      
