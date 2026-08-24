@@ -63,19 +63,18 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-    // A list of reliable CORS proxies for HLS streams
     const PROXIES = [
       (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
       (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
       (url) => `https://thingproxy.freeboard.io/fetch/${url}`
     ];
 
-    let proxyIndex = 0;
+    let proxyIndex = -1; // -1 means direct, 0+ means proxy
     let hls = null;
     let currentSrc = null;
     let unmuted = false;
 
-    // Attempt to unmute on user interaction (Autoplay policy bypass)
     const unmute = () => {
       if (!unmuted) {
         video.muted = false;
@@ -89,7 +88,7 @@
     function showError(msg) {
       statusEl.style.display = 'block';
       video.style.display = 'none';
-      statusEl.innerHTML = `Stream failed to load.<br><br><small style="opacity:0.7">${msg}</small><br><button onclick="location.reload()">Reload Player</button>`;
+      statusEl.innerHTML = `Stream failed to load.<br><br><small style="opacity:0.7">${msg}</small><br><button onclick="location.reload()" style="margin-top: 20px;">Reload Player</button>`;
     }
 
     async function init() {
@@ -120,15 +119,16 @@
       const isIOS = video.canPlayType('application/vnd.apple.mpegurl');
 
       if (isIOS) {
-        // Apple Native Player (iOS/iPad Safari)
+        // Apple Native Player
         video.src = currentSrc;
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         }, { once: true });
         
-        // Fallback to HLS.js with proxy if native iOS fails due to CORS
+        // For iOS Safari, we don't easily have control over proxied chunks without a custom JS parser,
+        // so if native fails, we fallback to hls.js
         video.onerror = () => {
-          console.log("Native iOS failed, trying proxy...");
+          console.log("Native iOS failed, trying HLS.js with proxy...");
           video.removeAttribute('src');
           video.load();
           startHlsWithProxy();
@@ -147,18 +147,18 @@
         return;
       }
 
-      // If proxyIndex is 0, try direct first. If proxyIndex > 0, use the proxy.
-      const useProxy = proxyIndex > 0;
-      
+      const useProxy = proxyIndex >= 0;
+      const activeProxyFunc = useProxy ? PROXIES[proxyIndex] : null;
+
       hls = new Hls({
         maxBufferLength: 30,
-        xhrSetup: (xhr, url) => {
-          if (url.indexOf('http') === 0) {
-            if (useProxy) {
-              xhr.open('GET', PROXIES[proxyIndex - 1](url), true);
-            } else {
-              xhr.open('GET', url, true);
+        // Custom loader to intercept XHRs and apply the proxy dynamically
+        loader: class extends Hls.DefaultConfig.loader {
+          load(context, config, callbacks) {
+            if (useProxy && context.url.indexOf('http') === 0) {
+              context.url = activeProxyFunc(context.url);
             }
+            super.load(context, config, callbacks);
           }
         }
       });
@@ -167,12 +167,14 @@
       hls.attachMedia(video);
 
       let started = false;
+      let fatalErrors = 0;
+
       const timeout = setTimeout(() => {
         if (!started) {
-          console.log("Load timed out, falling back to proxy...");
+          console.log("Load timed out, falling back...");
           fallbackToNextProxy();
         }
-      }, 4000); // 4-second timeout for direct/proxy load
+      }, 6000); // 6-second timeout
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         started = true;
@@ -181,11 +183,15 @@
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal && (data.type === Hls.ErrorTypes.NETWORK_ERROR || data.type === Hls.ErrorTypes.MEDIA_ERROR)) {
-          clearTimeout(timeout);
-          if (!started) {
-            console.log(`Error using ${useProxy ? 'proxy' : 'direct'}:`, data.details);
+        if (data.fatal) {
+          fatalErrors++;
+          if (fatalErrors > 3 || !started) {
+            clearTimeout(timeout);
+            console.log(`Error using ${useProxy ? PROXIES[proxyIndex].name : 'direct'}:`, data.details);
             fallbackToNextProxy();
+          } else {
+            // Try to recover from non-fatal or recoverable fatal errors
+            hls.startLoad();
           }
         }
       });
@@ -193,8 +199,8 @@
 
     function fallbackToNextProxy() {
       proxyIndex++;
-      if (proxyIndex > PROXIES.length) {
-        showError("All CORS proxies failed to load the stream.");
+      if (proxyIndex >= PROXIES.length) {
+        showError("All CORS proxies failed or are blocked by the host.");
         return;
       }
       startHlsWithProxy();
