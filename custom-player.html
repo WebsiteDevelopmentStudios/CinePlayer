@@ -98,7 +98,14 @@
       try {
         statusEl.innerText = "Fetching stream...";
         const res = await fetch(apiUrl);
-        const data = await res.json();
+        const text = await res.text();
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            throw new Error(`API Response: ${text.substring(0, 150)}`);
+        }
         
         if (!data.streamUrl) {
           throw new Error(data.error || "API did not return a stream URL.");
@@ -187,7 +194,7 @@
           fatalErrors++;
           if (fatalErrors > 3 || !started) {
             clearTimeout(timeout);
-            console.log(`Error using ${useProxy ? PROXIES[proxyIndex].name : 'direct'}:`, data.details);
+            console.log(`Error using ${useProxy ? 'proxy' : 'direct'}:`, data.details);
             fallbackToNextProxy();
           } else {
             // Try to recover from non-fatal or recoverable fatal errors
@@ -209,4 +216,5 @@
     init();
   </script>
 </body>
-</html>
+  </html>
+  
