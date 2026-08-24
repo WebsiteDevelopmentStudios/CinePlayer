@@ -5,7 +5,6 @@
   <!-- Disable user zoom and scaling on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Custom Player</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     /* Prevent scrolling and touch actions */
     html, body { 
@@ -21,11 +20,14 @@
       position: fixed;
     }
     
-    /* Make video fill the screen */
-    video { 
+    /* Make iframe cover the screen entirely */
+    #player { 
       width: 100vw;
       height: 100vh;
-      object-fit: contain; 
+      border: none;
+      position: absolute;
+      top: 0;
+      left: 0;
       background: #000; 
     }
     
@@ -57,7 +59,7 @@
 </head>
 <body>
   <div id="status">Fetching stream...</div>
-  <video id="video" controls autoplay playsinline style="display:none;"></video>
+  <iframe id="player" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" style="display:none;"></iframe>
 
   <script>
     const getQueryParam = (param) => {
@@ -84,104 +86,90 @@
       return null;
     }
 
-    // Helper to handle play logic and unmute fallback
-    function startPlayback(video) {
-      video.muted = false;
-      video.play().catch(() => {
-        console.log("Unmuted autoplay blocked by browser. Falling back to muted.");
-        video.muted = true;
-        video.play().catch(err => console.log("Even muted autoplay failed: ", err));
-        
-        const unmuteOnClick = () => {
-          if (video.muted) {
-            video.muted = false;
-          }
-          video.removeEventListener('click', unmuteOnClick);
-          video.removeEventListener('touchstart', unmuteOnClick);
-        };
-        video.addEventListener('click', unmuteOnClick);
-        video.addEventListener('touchstart', unmuteOnClick);
-      });
-    }
-
-    function showErrorMessage() {
-      const statusEl = document.getElementById('status');
-      const video = document.getElementById('video');
-      video.style.display = 'none';
-      statusEl.style.display = 'block';
-      statusEl.innerHTML = 'Stream failed to load, likely due to anti-bot or CORS restrictions.<br><button onclick="location.reload()">Reload Player</button>';
-    }
-
     async function init() {
       const statusEl = document.getElementById('status');
-      const video = document.getElementById('video');
+      const player = document.getElementById('player');
       
       const streamUrl = await fetchStream(apiUrl);
       
       if (!streamUrl) {
-        showErrorMessage();
+        statusEl.style.display = 'block';
+        player.style.display = 'none';
+        statusEl.innerHTML = 'Stream failed to load, likely due to anti-bot or CORS restrictions.<br><button onclick="location.reload()">Reload Player</button>';
         return;
       }
 
       statusEl.style.display = 'none';
-      video.style.display = 'block';
+      player.style.display = 'block';
 
-      video.onerror = () => {
-        console.error("Video Tag Error:", video.error);
-        showErrorMessage();
-      };
+      // Escape quotes to prevent breaking the HTML string
+      const safeStreamUrl = streamUrl.replace(/"/g, '\\"');
 
-      // Handle HLS (.m3u8) playback
-      if (streamUrl.includes('.m3u8')) {
-        if (Hls.isSupported()) {
-          const hls = new Hls();
-          hls.loadSource(streamUrl);
-          hls.attachMedia(video);
-          
-          hls.on(Hls.Events.ERROR, function(event, data) {
-            console.error('HLS Error:', data);
-            if (data.fatal) {
-              switch (data.type) {
-                case Hls.ErrorTypes.NETWORK_ERROR:
-                  console.log("Network error, attempting to recover...");
-                  hls.startLoad();
-                  break;
-                case Hls.ErrorTypes.MEDIA_ERROR:
-                  console.log("Media error, attempting to recover...");
-                  hls.recoverMediaError();
-                  break;
-                default:
-                  // Cannot recover from this error (likely CORS blocking the video)
-                  hls.destroy();
-                  showErrorMessage();
-                  break;
-              }
+      // Build a fully isolated video player inside the iframe
+      const playerHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+          <style>
+            html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+            video { width: 100%; height: 100%; object-fit: contain; }
+          </style>
+          <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+        </head>
+        <body>
+          <video id="v" controls autoplay playsinline></video>
+          <script>
+            var v = document.getElementById('v');
+            var src = "${safeStreamUrl}";
+            
+            // Unmute interaction helper
+            function tryPlay() {
+              v.muted = false;
+              v.play().catch(function() {
+                v.muted = true;
+                v.play().catch(function(e){ console.log("Autoplay blocked entirely: ", e); });
+                
+                var unmute = function() {
+                  if(v.muted) v.muted = false;
+                  v.removeEventListener('click', unmute);
+                  v.removeEventListener('touchstart', unmute);
+                };
+                v.addEventListener('click', unmute);
+                v.addEventListener('touchstart', unmute);
+              });
             }
-          });
 
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            startPlayback(video);
-          });
-          
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Native HLS support (Safari)
-          video.src = streamUrl;
-          video.addEventListener('loadedmetadata', () => {
-            startPlayback(video);
-          });
-        } else {
-          showErrorMessage();
-        }
-      } else {
-        // Handle direct video playback (.mp4)
-        video.src = streamUrl;
-        video.addEventListener('loadedmetadata', () => {
-          startPlayback(video);
-        });
-      }
+            if (src.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+              var hls = new Hls();
+              hls.loadSource(src);
+              hls.attachMedia(v);
+              
+              hls.on(Hls.Events.ERROR, function(event, data) {
+                console.error("Iframe HLS Error:", data);
+                if (data.fatal) {
+                  hls.destroy();
+                  document.body.innerHTML = '<div style="color:white;font-family:sans-serif;text-align:center;padding:20px;">Stream failed to load inside player.</div>';
+                }
+              });
+              
+              hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+            } else {
+              // Fallback for MP4 or native Safari HLS
+              v.src = src;
+              v.addEventListener('loadedmetadata', tryPlay);
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      // Inject the standalone player into the iframe
+      player.srcdoc = playerHtml;
     }
 
     init();
   </script>
 </body>
-</html>
+            </html>
+            
