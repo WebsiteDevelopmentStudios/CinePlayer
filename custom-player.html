@@ -11,7 +11,7 @@
             background: #000; 
             color: #fff; 
             font-family: sans-serif;
-            touch-action: pan-x pan-y; /* Prevents pinch zoom gestures */
+            touch-action: pan-x pan-y; 
         }
         #player-container { max-width: 800px; margin: 50px auto; text-align: center; }
         #status { padding: 20px; font-size: 1.2rem; }
@@ -21,7 +21,7 @@
 
 <div id="player-container">
     <div id="status">Fetching stream...</div>
-    <video id="video" controls width="100%" style="display:none;"></video>
+    <video id="video" controls playsinline width="100%" style="display:none;"></video>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -61,7 +61,8 @@
         if (Hls.isSupported()) {
             const hls = new Hls({
                 xhrSetup: (xhr, url) => {
-                    xhr.open('GET', `https://corsproxy.io/?url=${encodeURIComponent(url)}`, true);
+                    // Using allorigins proxy to bypass CORS
+                    xhr.open('GET', `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, true);
                 }
             });
             
