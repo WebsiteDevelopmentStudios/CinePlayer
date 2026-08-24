@@ -39,9 +39,7 @@
                 
                 statusElement.innerText = "Loading video (Proxy)...";
                 
-                // Wrap the URL in a CORS proxy so the video host allows our browser to load it
-                streamUrl = `https://corsproxy.io/?url=${encodeURIComponent(streamUrl)}`;
-                
+                // Pass the original URL directly to playHLS
                 playHLS(streamUrl);
             } else {
                 statusElement.innerText = "Error: " + (data.error || "Could not find stream.");
@@ -51,10 +49,17 @@
         }
     }
 
-    function playHLS(url) {
+    function playHLS(originalUrl) {
         if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.loadSource(url);
+            // We use xhrSetup to ensure EVERY request hls.js makes goes through the CORS proxy
+            const hls = new Hls({
+                xhrSetup: (xhr, url) => {
+                    // Wrap the absolute URL of the manifest or .ts chunk
+                    xhr.open('GET', `https://corsproxy.io/?url=${encodeURIComponent(url)}`, true);
+                }
+            });
+            
+            hls.loadSource(originalUrl);
             hls.attachMedia(videoElement);
             
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
@@ -71,7 +76,7 @@
                 }
             });
         } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-            videoElement.src = url;
+            videoElement.src = originalUrl;
             videoElement.addEventListener('loadedmetadata', function() {
                 statusElement.style.display = 'none';
                 videoElement.style.display = 'block';
@@ -84,4 +89,5 @@
 </script>
 
 </body>
-</html>
+    </html>
+    
