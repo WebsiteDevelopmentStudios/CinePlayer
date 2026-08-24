@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
     const page = await browser.newPage();
     
-    // STEALTH MODE: Hide the fact that we are a bot
+    // STEALTH MODE
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, 'webdriver', {
         get: () => false,
@@ -61,19 +61,21 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Broadened to catch .m3u8 OR .mp4 OR sourceplayer URLs
       if ((url.includes('.m3u8') || url.includes('.mp4')) && !url.includes('cineby.hair/_stream')) {
         foundStreamUrl = url;
       }
       request.continue();
     });
 
-    // STEP 3: Navigate to the movie page
+    // STEP 3: Navigate to the movie page and capture the HTTP status
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     
+    let httpStatus = 0;
     await page.goto(movieUrl, {
       waitUntil: 'domcontentloaded',
       timeout: 8000
+    }).then(resp => {
+      if (resp) httpStatus = resp.status();
     }).catch(() => {});
 
     // STEP 4: Try to click the Play button if it exists
@@ -91,10 +93,6 @@ export default async function handler(req, res) {
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    const finalUrl = page.url();
-    const pageContent = await page.content().catch(() => 'Could not get HTML');
-    const snippet = pageContent.substring(0, 500); // Grab first 500 characters of HTML
-    
     await browser.close();
     browser = null;
 
@@ -107,7 +105,7 @@ export default async function handler(req, res) {
     } else {
       return res.status(404).json({
         success: false,
-        error: `Timeout. Final URL: ${finalUrl} | HTML Snippet: ${snippet}`
+        error: `Timeout. HTTP Status: ${httpStatus}`
       });
     }
 
@@ -120,5 +118,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-        }
-                            
+  }
+      
