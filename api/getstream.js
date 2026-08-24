@@ -3,33 +3,14 @@ import puppeteer from 'puppeteer-core';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  const { imdb } = req.query;
   
-  if (!imdb) {
-    return res.status(400).json({ error: "No IMDb ID provided" });
-  }
-
   let browser = null;
 
   try {
-    // STEP 1: Fetch 2embed.cc to find the TMDB ID
-    const response1 = await fetch(`https://2embed.cc/embed/${imdb}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Referer': 'https://2embed.cc/'
-      }
-    });
+    // TEST: Hardcoded TMDB ID for The Super Mario Galaxy Movie
+    const tmdbId = "1226863";
 
-    const html1 = await response1.text();
-    const tmdbMatch = html1.match(/tmdb=(\d+)/);
-    
-    if (!tmdbMatch || !tmdbMatch[1]) {
-      return res.status(404).json({ error: "Could not find TMDB ID on 2embed" });
-    }
-
-    const tmdbId = tmdbMatch[1];
-
-    // STEP 2: Launch Headless Browser
+    // Launch Headless Browser
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
@@ -56,7 +37,6 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Log any api/stream/play requests to see what the site is doing
       if (url.includes('/api/') || url.includes('/stream/') || url.includes('/play/') || url.includes('/video/')) {
         allRequests.push(url);
       }
@@ -66,7 +46,6 @@ export default async function handler(req, res) {
       request.continue();
     });
 
-    // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
     
     await page.goto(movieUrl, {
@@ -74,30 +53,23 @@ export default async function handler(req, res) {
       timeout: 10000
     }).catch(() => {});
 
-    // Wait 2 seconds for the React app to build the video player
-    await new Promise(r => setTimeout(r, 2000));
-
-    // Click in the center of the screen
-    await page.mouse.click(683, 384);
-    
-    // Wait another 3 seconds for video to load after click
     await new Promise(r => setTimeout(r, 3000));
 
-    // Let's also grab all iFrames and video tags from the HTML
-    const pageHtml = await page.content().catch(() => '');
-    const videoTags = pageHtml.match(/<video[^>]*>/g) || [];
-    const iframeTags = pageHtml.match(/<iframe[^>]*>/g) || [];
+    await page.mouse.click(683, 384);
+    await new Promise(r => setTimeout(r, 2000));
+
+    const bodyHtml = await page.evaluate(() => document.body.innerHTML).catch(() => 'Could not get body HTML');
     
     await browser.close();
     browser = null;
 
-    // STEP 6: Return the results
     if (foundStreamUrl) {
       return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
+      const snippet = bodyHtml.substring(0, 1500);
       return res.status(404).json({
         success: false,
-        error: `Timeout. API Requests: ${JSON.stringify(allRequests)} | Video Tags: ${JSON.stringify(videoTags)} | IFrames: ${JSON.stringify(iframeTags)}`
+        error: `Timeout. Requests: ${JSON.stringify(allRequests)} | Body HTML: ${snippet}`
       });
     }
 
@@ -105,9 +77,9 @@ export default async function handler(req, res) {
     if (browser) {
       await browser.close().catch(() => {});
     }
-
     return res.status(500).json({
       error: 'Chromium crash reason: ' + error.message
     });
   }
-}
+                                                                }
+        
