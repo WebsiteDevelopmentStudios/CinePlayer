@@ -114,11 +114,32 @@
           <style>
             html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
             video { width: 100%; height: 100%; object-fit: contain; }
+            #error-box { 
+              display: none; 
+              color: white; 
+              text-align: center; 
+              position: absolute; 
+              top: 50%; 
+              left: 50%; 
+              transform: translate(-50%, -50%); 
+              font-family: Arial, sans-serif; 
+            }
+            button { 
+              margin-top: 15px; 
+              padding: 10px 20px; 
+              background: #fff; 
+              color: #000; 
+              border: none; 
+              border-radius: 5px; 
+              cursor: pointer; 
+              font-weight: bold; 
+            }
           </style>
           <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
         </head>
         <body>
-          <video id="v" controls autoplay playsinline></video>
+          <video id="v" controls autoplay playsinline webkit-playsinline></video>
+          <div id="error-box">Stream blocked or offline.<br><button onclick="location.reload()">Reload Player</button></div>
           <script>
             var v = document.getElementById('v');
             var src = "${safeStreamUrl}";
@@ -127,6 +148,19 @@
             var hlsTimeout;
             var hasStarted = false;
             
+            // Array of proxy functions to bypass CORS recursively
+            var proxies = [
+              function(url) { return 'https://corsproxy.io/?url=' + encodeURIComponent(url); },
+              function(url) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url); },
+              function(url) { return 'https://thingproxy.freeboard.io/fetch/' + url; }
+            ];
+            var proxyIndex = 0;
+
+            function failStream() {
+              v.style.display = 'none';
+              document.getElementById('error-box').style.display = 'block';
+            }
+
             function tryPlay() {
               v.muted = false;
               v.play().catch(function() {
@@ -160,6 +194,7 @@
                   if (!hasStarted) {
                     console.log("Direct load too slow, falling back to proxy...");
                     hls.destroy();
+                    proxyIndex = 0;
                     startProxyHls();
                   }
                 }, 4000);
@@ -168,31 +203,46 @@
                   if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
                     clearTimeout(hlsTimeout);
                     hls.destroy();
+                    proxyIndex = 0;
                     startProxyHls();
                   }
                 });
+              } else {
+                failStream();
               }
             }
 
             function startProxyHls() {
+              if (proxyIndex >= proxies.length) {
+                console.log("All proxies failed.");
+                failStream();
+                return;
+              }
+
+              console.log("Attempting proxy index:", proxyIndex);
+              
               hls = new Hls({
                 xhrSetup: function(xhr, url) {
                   if (url.indexOf('http') === 0) {
-                    xhr.open('GET', 'https://corsproxy.io/?url=' + encodeURIComponent(url), true);
+                    xhr.open('GET', proxies[proxyIndex](url), true);
                   }
                 }
               });
               
-              var proxiedSrc = 'https://corsproxy.io/?url=' + encodeURIComponent(src);
-              hls.loadSource(proxiedSrc);
+              hls.loadSource(src);
               hls.attachMedia(v);
               
-              hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+              hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                hasStarted = true;
+                tryPlay();
+              });
+
               hls.on(Hls.Events.ERROR, function(event, data) {
-                console.error("Proxy HLS Error:", data);
                 if (data.fatal) {
+                  console.log("Proxy " + proxyIndex + " failed with error: ", data.type);
                   hls.destroy();
-                  document.body.innerHTML = '<div style="color:white;text-align:center;padding:20px;">Stream blocked or offline.</div>';
+                  proxyIndex++;
+                  startProxyHls();
                 }
               });
             }
@@ -201,8 +251,27 @@
               if (isIOS) {
                 // Native Player (iPhone/iPad)
                 v.src = src;
-                v.addEventListener('loadedmetadata', tryPlay);
-                v.onerror = startDirectHls;
+                v.addEventListener('loadedmetadata', function() {
+                  hasStarted = true;
+                  clearTimeout(hlsTimeout);
+                  tryPlay();
+                });
+                v.onerror = function() {
+                  clearTimeout(hlsTimeout);
+                  v.removeAttribute('src');
+                  v.load();
+                  startDirectHls();
+                };
+                
+                // Timeout Fallback for native
+                hlsTimeout = setTimeout(function() {
+                  if (!hasStarted) {
+                    console.log("Native iOS load too slow, falling back to HLS.js direct...");
+                    v.removeAttribute('src');
+                    v.load();
+                    startDirectHls();
+                  }
+                }, 4000);
               } else {
                 // Direct HLS (Desktop/Android) with aggressive 4s fallback
                 startDirectHls();
@@ -211,6 +280,7 @@
               // MP4s
               v.src = src;
               v.addEventListener('loadedmetadata', tryPlay);
+              v.onerror = failStream;
             }
           <\/script>
         </body>
@@ -223,4 +293,5 @@
     init();
   </script>
 </body>
-</html>
+  </html>
+  
