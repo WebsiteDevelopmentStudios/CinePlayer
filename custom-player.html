@@ -68,7 +68,7 @@
     const imdb = getQueryParam('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
-    async function fetchStream(url, retries = 3) {
+    async function fetchStream(url, retries = 2) {
       for (let i = 0; i < retries; i++) {
         document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
         try {
@@ -82,7 +82,8 @@
         } catch (e) {
           console.log(`Network error on attempt ${i + 1}:`, e.message);
         }
-        await new Promise(r => setTimeout(r, 1500));
+        // Minimal delay to let the serverless instance warm up
+        await new Promise(r => setTimeout(r, 500));
       }
       return null;
     }
@@ -96,7 +97,7 @@
       if (!streamUrl) {
         statusEl.style.display = 'block';
         player.style.display = 'none';
-        statusEl.innerHTML = 'Stream failed to load, likely due to anti-bot or CORS restrictions.<br><button onclick="location.reload()">Reload Player</button>';
+        statusEl.innerHTML = 'Stream failed to load (API Timeout).<br><button onclick="location.reload()">Reload Player</button>';
         return;
       }
 
@@ -121,7 +122,10 @@
           <script>
             var v = document.getElementById('v');
             var src = "${safeStreamUrl}";
-            var proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(src);
+            var isIOS = v.canPlayType('application/vnd.apple.mpegurl');
+            var hls;
+            var hlsTimeout;
+            var hasStarted = false;
             
             function tryPlay() {
               v.muted = false;
@@ -139,22 +143,72 @@
               });
             }
 
-            if (src.includes('.m3u8') && window.Hls && Hls.isSupported()) {
-              var hls = new Hls();
-              // Load the manifest through the CORS proxy
-              hls.loadSource(proxyUrl);
+            function startDirectHls() {
+              if (window.Hls && Hls.isSupported()) {
+                hls = new Hls();
+                hls.loadSource(src);
+                hls.attachMedia(v);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                  hasStarted = true;
+                  clearTimeout(hlsTimeout);
+                  tryPlay();
+                });
+                
+                // Fallback Setup: If it takes longer than 4 seconds, bypass to proxy
+                hlsTimeout = setTimeout(function() {
+                  if (!hasStarted) {
+                    console.log("Direct load too slow, falling back to proxy...");
+                    hls.destroy();
+                    startProxyHls();
+                  }
+                }, 4000);
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                  if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                    clearTimeout(hlsTimeout);
+                    hls.destroy();
+                    startProxyHls();
+                  }
+                });
+              }
+            }
+
+            function startProxyHls() {
+              hls = new Hls({
+                xhrSetup: function(xhr, url) {
+                  if (url.indexOf('http') === 0) {
+                    xhr.open('GET', 'https://corsproxy.io/?url=' + encodeURIComponent(url), true);
+                  }
+                }
+              });
+              
+              var proxiedSrc = 'https://corsproxy.io/?url=' + encodeURIComponent(src);
+              hls.loadSource(proxiedSrc);
               hls.attachMedia(v);
               
               hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
-              
               hls.on(Hls.Events.ERROR, function(event, data) {
-                console.error("HLS Error:", data);
+                console.error("Proxy HLS Error:", data);
                 if (data.fatal) {
                   hls.destroy();
-                  document.body.innerHTML = '<div style="color:white;font-family:monospace;text-align:center;padding:20px;">CORS Proxy Failed to load the stream.</div>';
+                  document.body.innerHTML = '<div style="color:white;text-align:center;padding:20px;">Stream blocked or offline.</div>';
                 }
               });
+            }
+
+            if (src.includes('.m3u8')) {
+              if (isIOS) {
+                // Native Player (iPhone/iPad)
+                v.src = src;
+                v.addEventListener('loadedmetadata', tryPlay);
+                v.onerror = startDirectHls;
+              } else {
+                // Direct HLS (Desktop/Android) with aggressive 4s fallback
+                startDirectHls();
+              }
             } else {
+              // MP4s
               v.src = src;
               v.addEventListener('loadedmetadata', tryPlay);
             }
