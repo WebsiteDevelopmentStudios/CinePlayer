@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 768 });
+    await page.setViewport({ width: 1280, height: 720 });
     
     // STEALTH MODE
     await page.evaluateOnNewDocument(() => {
@@ -66,16 +66,15 @@ export default async function handler(req, res) {
     
     await page.goto(movieUrl, {
       waitUntil: 'load',
-      timeout: 10000
+      timeout: 6000 // Reduced to 6 seconds
     }).catch(() => {});
 
-    // Wait 4 seconds for React to render
-    await new Promise(r => setTimeout(r, 4000));
+    // Wait 2 seconds for React to render
+    await new Promise(r => setTimeout(r, 2000));
 
     // Scroll down to make sure the player is in view
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 3));
-    await new Promise(r => setTimeout(r, 1000));
-
+    
     // STEP 4: Click the play button
     try {
       await page.evaluate(() => {
@@ -85,7 +84,11 @@ export default async function handler(req, res) {
       });
     } catch (e) { /* ignore */ }
     
-    await new Promise(r => setTimeout(r, 3000));
+    // Wait 3 seconds for the video stream to load after clicking
+    for (let i = 0; i < 3; i++) {
+      if (foundStreamUrl) break;
+      await new Promise(r => setTimeout(r, 1000));
+    }
 
     await browser.close();
     browser = null;
@@ -111,5 +114,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-                            }
-        
+        }
+  
