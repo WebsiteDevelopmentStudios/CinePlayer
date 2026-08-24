@@ -82,7 +82,6 @@
         } catch (e) {
           console.log(`Network error on attempt ${i + 1}:`, e.message);
         }
-        // Wait 1.5 seconds between attempts to let the serverless function warm up
         await new Promise(r => setTimeout(r, 1500));
       }
       return null;
@@ -106,7 +105,6 @@
 
       const safeStreamUrl = streamUrl.replace(/"/g, '\\"');
 
-      // Using <\/script> so the browser doesn't cut off the JS string early
       const playerHtml = `
         <!DOCTYPE html>
         <html>
@@ -119,10 +117,14 @@
           <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
         </head>
         <body>
-          <video id="v" controls autoplay playsinline></video>
+          <video id="v" crossorigin="anonymous" controls autoplay playsinline></video>
           <script>
             var v = document.getElementById('v');
             var src = "${safeStreamUrl}";
+            
+            function showError(msg) {
+              document.body.innerHTML = '<div style="color:white;font-family:monospace;text-align:center;padding:20px;word-break:break-all;">Player Error: ' + msg + '<br><br>Stream URL: ' + src + '</div>';
+            }
             
             function tryPlay() {
               v.muted = false;
@@ -149,13 +151,16 @@
                 console.error("Iframe HLS Error:", data);
                 if (data.fatal) {
                   hls.destroy();
-                  document.body.innerHTML = '<div style="color:white;font-family:sans-serif;text-align:center;padding:20px;">Stream failed to load inside player.</div>';
+                  showError(data.type + ' - ' + data.details);
                 }
               });
               
               hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
             } else {
               v.src = src;
+              v.onerror = function() {
+                showError('Native Video Error: ' + (v.error ? v.error.code + ' - ' + v.error.message : 'Unknown'));
+              };
               v.addEventListener('loadedmetadata', tryPlay);
             }
           <\/script>
@@ -169,5 +174,4 @@
     init();
   </script>
 </body>
-  </html>
-  
+</html>
