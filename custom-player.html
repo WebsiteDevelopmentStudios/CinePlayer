@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Custom Player</title>
   <style>
-    /* Prevent scrolling and touch actions */
     html, body { 
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
+      margin: 0; 
+      padding: 0; 
+      width: 100%; 
+      height: 100%; 
       background: #000; 
       color: #fff; 
       font-family: Arial, sans-serif; 
@@ -19,14 +18,12 @@
       position: fixed;
     }
     
-    #player { 
-      width: 100vw;
-      height: 100vh;
-      border: none;
-      position: absolute;
-      top: 0;
-      left: 0;
-      background: #000; 
+    video { 
+      width: 100vw; 
+      height: 100vh; 
+      object-fit: contain; 
+      background: #000;
+      display: none;
     }
     
     #status { 
@@ -38,7 +35,7 @@
       padding: 20px; 
       z-index: 10;
       max-width: 90vw;
-      word-break: break-all;
+      word-break: break-word;
     }
     
     button {
@@ -51,274 +48,159 @@
       cursor: pointer;
       font-weight: bold;
     }
-    
-    button:hover {
-      background: #ccc;
-    }
   </style>
 </head>
 <body>
   <div id="status">Fetching stream...</div>
-  <iframe id="player" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" style="display:none;"></iframe>
+  <video id="video" controls autoplay playsinline webkit-playsinline muted></video>
 
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
-    const getQueryParam = (param) => {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get(param);
-    };
-
-    const imdb = getQueryParam('imdb') || 'tt1375666'; 
+    const urlParams = new URLSearchParams(window.location.search);
+    const imdb = urlParams.get('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
-    async function fetchWithTimeout(url, options = {}, timeout = 14000) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      try {
-        const res = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timeoutId);
-        return res;
-      } catch (e) {
-        clearTimeout(timeoutId);
-        throw e;
+    const video = document.getElementById('video');
+    const statusEl = document.getElementById('status');
+
+    // A list of reliable CORS proxies for HLS streams
+    const PROXIES = [
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
+
+    let proxyIndex = 0;
+    let hls = null;
+    let currentSrc = null;
+    let unmuted = false;
+
+    // Attempt to unmute on user interaction (Autoplay policy bypass)
+    const unmute = () => {
+      if (!unmuted) {
+        video.muted = false;
+        unmuted = true;
+        video.play().catch(() => {});
       }
-    }
+    };
+    document.addEventListener('click', unmute);
+    document.addEventListener('touchstart', unmute);
 
-    async function fetchStream(url, retries = 2) {
-      // Silent warm-up attempt to wake the serverless instance
-      fetch(url).catch(() => {});
-      await new Promise(r => setTimeout(r, 1000));
-
-      let lastError = null;
-
-      for (let i = 0; i < retries; i++) {
-        document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
-        try {
-          const response = await fetchWithTimeout(url, {}, 14000);
-          const text = await response.text();
-          let data;
-          
-          try {
-            data = JSON.parse(text);
-          } catch (e) {
-            // Vercel likely returned an error page instead of JSON
-            throw new Error(`Invalid JSON Response: ${text.substring(0, 200)}`);
-          }
-          
-          if (data.streamUrl) {
-            return data.streamUrl;
-          }
-          
-          throw new Error(data.error || "API did not return streamUrl");
-        } catch (e) {
-          lastError = e;
-          console.log(`Attempt ${i + 1} failed:`, e.message);
-          document.getElementById('status').innerText = `Attempt ${i + 1} Error:\n${e.message.substring(0, 150)}`;
-        }
-        await new Promise(r => setTimeout(r, 1500));
-      }
-      return lastError ? lastError.message : null;
+    function showError(msg) {
+      statusEl.style.display = 'block';
+      video.style.display = 'none';
+      statusEl.innerHTML = `Stream failed to load.<br><br><small style="opacity:0.7">${msg}</small><br><button onclick="location.reload()">Reload Player</button>`;
     }
 
     async function init() {
-      const statusEl = document.getElementById('status');
-      const player = document.getElementById('player');
+      // Silent warmup
+      fetch(apiUrl).catch(() => {});
       
-      const fetchResult = await fetchStream(apiUrl);
-      
-      if (!fetchResult || fetchResult.startsWith("Invalid") || fetchResult.includes("Error") || fetchResult.includes("Timeout")) {
-        statusEl.style.display = 'block';
-        player.style.display = 'none';
-        statusEl.innerHTML = `Stream failed to load.<br><br><small style="opacity:0.7">${fetchResult || 'Unknown Timeout'}</small><br><button onclick="location.reload()" style="margin-top: 20px;">Reload Player</button>`;
+      try {
+        statusEl.innerText = "Fetching stream...";
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+        
+        if (!data.streamUrl) {
+          throw new Error(data.error || "API did not return a stream URL.");
+        }
+
+        currentSrc = data.streamUrl;
+        statusEl.style.display = 'none';
+        video.style.display = 'block';
+
+        startPlayback();
+        
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function startPlayback() {
+      const isIOS = video.canPlayType('application/vnd.apple.mpegurl');
+
+      if (isIOS) {
+        // Apple Native Player (iOS/iPad Safari)
+        video.src = currentSrc;
+        video.addEventListener('loadedmetadata', () => {
+          video.play().catch(e => console.log("Autoplay blocked: ", e));
+        }, { once: true });
+        
+        // Fallback to HLS.js with proxy if native iOS fails due to CORS
+        video.onerror = () => {
+          console.log("Native iOS failed, trying proxy...");
+          video.removeAttribute('src');
+          video.load();
+          startHlsWithProxy();
+        };
+      } else {
+        // Desktop / Android using hls.js
+        startHlsWithProxy();
+      }
+    }
+
+    function startHlsWithProxy() {
+      if (hls) hls.destroy();
+
+      if (!window.Hls || !Hls.isSupported()) {
+        showError("HLS not supported in this browser.");
         return;
       }
 
-      const streamUrl = fetchResult;
-
-      statusEl.style.display = 'none';
-      player.style.display = 'block';
-
-      const safeStreamUrl = streamUrl.replace(/"/g, '\\"');
-
-      const playerHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-          <style>
-            html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-            video { width: 100%; height: 100%; object-fit: contain; }
-            #error-box { 
-              display: none; 
-              color: white; 
-              text-align: center; 
-              position: absolute; 
-              top: 50%; 
-              left: 50%; 
-              transform: translate(-50%, -50%); 
-              font-family: Arial, sans-serif; 
-            }
-            button { 
-              margin-top: 15px; 
-              padding: 10px 20px; 
-              background: #fff; 
-              color: #000; 
-              border: none; 
-              border-radius: 5px; 
-              cursor: pointer; 
-              font-weight: bold; 
-            }
-          </style>
-          <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
-        </head>
-        <body>
-          <video id="v" controls autoplay playsinline webkit-playsinline></video>
-          <div id="error-box">Stream blocked or offline.<br><button onclick="location.reload()">Reload Player</button></div>
-          <script>
-            var v = document.getElementById('v');
-            var src = "${safeStreamUrl}";
-            var isIOS = v.canPlayType('application/vnd.apple.mpegurl');
-            var hls;
-            var hlsTimeout;
-            var hasStarted = false;
-            
-            var proxies = [
-              function(url) { return 'https://corsproxy.io/?url=' + encodeURIComponent(url); },
-              function(url) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url); },
-              function(url) { return 'https://thingproxy.freeboard.io/fetch/' + url; }
-            ];
-            var proxyIndex = 0;
-
-            function failStream() {
-              v.style.display = 'none';
-              document.getElementById('error-box').style.display = 'block';
-            }
-
-            function tryPlay() {
-              v.muted = false;
-              v.play().catch(function() {
-                v.muted = true;
-                v.play().catch(function(e){ console.log("Autoplay blocked: ", e); });
-                
-                var unmute = function() {
-                  if(v.muted) v.muted = false;
-                  v.removeEventListener('click', unmute);
-                  v.removeEventListener('touchstart', unmute);
-                };
-                v.addEventListener('click', unmute);
-                v.addEventListener('touchstart', unmute);
-              });
-            }
-
-            function startDirectHls() {
-              if (window.Hls && Hls.isSupported()) {
-                hls = new Hls();
-                hls.loadSource(src);
-                hls.attachMedia(v);
-                
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                  hasStarted = true;
-                  clearTimeout(hlsTimeout);
-                  tryPlay();
-                });
-                
-                hlsTimeout = setTimeout(function() {
-                  if (!hasStarted) {
-                    console.log("Direct load too slow, falling back to proxy...");
-                    hls.destroy();
-                    proxyIndex = 0;
-                    startProxyHls();
-                  }
-                }, 4000);
-
-                hls.on(Hls.Events.ERROR, function(event, data) {
-                  if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                    clearTimeout(hlsTimeout);
-                    hls.destroy();
-                    proxyIndex = 0;
-                    startProxyHls();
-                  }
-                });
-              } else {
-                failStream();
-              }
-            }
-
-            function startProxyHls() {
-              if (proxyIndex >= proxies.length) {
-                console.log("All proxies failed.");
-                failStream();
-                return;
-              }
-
-              console.log("Attempting proxy index:", proxyIndex);
-              
-              hls = new Hls({
-                xhrSetup: function(xhr, url) {
-                  if (url.indexOf('http') === 0) {
-                    xhr.open('GET', proxies[proxyIndex](url), true);
-                  }
-                }
-              });
-              
-              hls.loadSource(src);
-              hls.attachMedia(v);
-              
-              hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                hasStarted = true;
-                tryPlay();
-              });
-
-              hls.on(Hls.Events.ERROR, function(event, data) {
-                if (data.fatal) {
-                  console.log("Proxy " + proxyIndex + " failed with error: ", data.type);
-                  hls.destroy();
-                  proxyIndex++;
-                  startProxyHls();
-                }
-              });
-            }
-
-            if (src.includes('.m3u8')) {
-              if (isIOS) {
-                v.src = src;
-                v.addEventListener('loadedmetadata', function() {
-                  hasStarted = true;
-                  clearTimeout(hlsTimeout);
-                  tryPlay();
-                });
-                v.onerror = function() {
-                  clearTimeout(hlsTimeout);
-                  v.removeAttribute('src');
-                  v.load();
-                  startDirectHls();
-                };
-                
-                hlsTimeout = setTimeout(function() {
-                  if (!hasStarted) {
-                    console.log("Native iOS load too slow, falling back to HLS.js direct...");
-                    v.removeAttribute('src');
-                    v.load();
-                    startDirectHls();
-                  }
-                }, 4000);
-              } else {
-                startDirectHls();
-              }
+      // If proxyIndex is 0, try direct first. If proxyIndex > 0, use the proxy.
+      const useProxy = proxyIndex > 0;
+      
+      hls = new Hls({
+        maxBufferLength: 30,
+        xhrSetup: (xhr, url) => {
+          if (url.indexOf('http') === 0) {
+            if (useProxy) {
+              xhr.open('GET', PROXIES[proxyIndex - 1](url), true);
             } else {
-              v.src = src;
-              v.addEventListener('loadedmetadata', tryPlay);
-              v.onerror = failStream;
+              xhr.open('GET', url, true);
             }
-          <\/script>
-        </body>
-        </html>
-      `;
+          }
+        }
+      });
 
-      player.srcdoc = playerHtml;
+      hls.loadSource(currentSrc);
+      hls.attachMedia(video);
+
+      let started = false;
+      const timeout = setTimeout(() => {
+        if (!started) {
+          console.log("Load timed out, falling back to proxy...");
+          fallbackToNextProxy();
+        }
+      }, 4000); // 4-second timeout for direct/proxy load
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        started = true;
+        clearTimeout(timeout);
+        video.play().catch(e => console.log("Autoplay blocked: ", e));
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal && (data.type === Hls.ErrorTypes.NETWORK_ERROR || data.type === Hls.ErrorTypes.MEDIA_ERROR)) {
+          clearTimeout(timeout);
+          if (!started) {
+            console.log(`Error using ${useProxy ? 'proxy' : 'direct'}:`, data.details);
+            fallbackToNextProxy();
+          }
+        }
+      });
+    }
+
+    function fallbackToNextProxy() {
+      proxyIndex++;
+      if (proxyIndex > PROXIES.length) {
+        showError("All CORS proxies failed to load the stream.");
+        return;
+      }
+      startHlsWithProxy();
     }
 
     init();
   </script>
 </body>
-  </html>
-  
+</html>
