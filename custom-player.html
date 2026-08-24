@@ -59,8 +59,12 @@
 
     function playHLS(originalUrl) {
         if (Hls.isSupported()) {
-            // Removed the proxy to test if it works directly
-            const hls = new Hls();
+            const hls = new Hls({
+                xhrSetup: (xhr, url) => {
+                    // Using codetabs proxy which handles large URLs perfectly
+                    xhr.open('GET', `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`, true);
+                }
+            });
             
             hls.loadSource(originalUrl);
             hls.attachMedia(videoElement);
