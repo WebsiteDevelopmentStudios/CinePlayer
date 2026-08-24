@@ -42,29 +42,24 @@ export default async function handler(req, res) {
     
     // STEALTH MODE
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      });
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en'],
-      });
-      window.chrome = {
-        runtime: {},
-      };
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      window.chrome = { runtime: {} };
     });
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
 
     let foundStreamUrl = null;
+    const streamRequests = []; // Keep track of all video-like requests
+    
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Changed to cineby.tech and broadened the match to include /stream/ or index.m3u8
-      if ((url.includes('.m3u8') || url.includes('.mp4') || url.includes('/stream/')) && !url.includes('cineby.tech')) {
+      // Catch any video/stream/file related request, no strict exclusions
+      if (url.includes('.m3u8') || url.includes('.mp4') || url.includes('/stream/') || url.includes('/video/') || url.includes('/playlist')) {
         foundStreamUrl = url;
+        streamRequests.push(url); // Add to our log
       }
       request.continue();
     });
@@ -88,13 +83,11 @@ export default async function handler(req, res) {
       await page.click('.vjs-big-play-button', { timeout: 1000 });
     } catch (e) { /* ignore */ }
 
-    // STEP 5: Poll for the stream URL for up to 7 seconds
-    for (let i = 0; i < 7; i++) {
+    // STEP 5: Poll for the stream URL for up to 5 seconds
+    for (let i = 0; i < 5; i++) {
       if (foundStreamUrl) break;
       await new Promise(r => setTimeout(r, 1000));
     }
-
-    const pageTitle = await page.title().catch(() => 'No Title');
     
     await browser.close();
     browser = null;
@@ -106,9 +99,10 @@ export default async function handler(req, res) {
         streamUrl: foundStreamUrl
       });
     } else {
+      // If it fails, show us the video requests the browser made so we can figure it out
       return res.status(404).json({
         success: false,
-        error: `Timeout. Page Title: ${pageTitle}`
+        error: `Timeout. Video Requests Found: ${JSON.stringify(streamRequests)}`
       });
     }
 
@@ -121,5 +115,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-}
+      }
   
