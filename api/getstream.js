@@ -7,10 +7,9 @@ export default async function handler(req, res) {
   let browser = null;
 
   try {
-    // TEST: Hardcoded TMDB ID for The Super Mario Galaxy Movie
+    // TEST: Hardcoded TMDB ID
     const tmdbId = "1226863";
 
-    // Launch Headless Browser
     browser = await puppeteer.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
@@ -37,7 +36,8 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      if (url.includes('/api/') || url.includes('/stream/') || url.includes('/play/') || url.includes('/video/')) {
+      // Catching all hyperlinks/script/api requests to see what React is doing
+      if (!url.includes('.css') && !url.includes('.js') && !url.includes('.woff') && !url.includes('.png') && !url.includes('.svg') && !url.includes('google')) {
         allRequests.push(url);
       }
       if (url.includes('.m3u8') || url.includes('.mp4')) {
@@ -53,10 +53,23 @@ export default async function handler(req, res) {
       timeout: 10000
     }).catch(() => {});
 
-    await new Promise(r => setTimeout(r, 3000));
+    // Wait 4 seconds for the React player to render
+    await new Promise(r => setTimeout(r, 4000));
 
-    await page.mouse.click(683, 384);
-    await new Promise(r => setTimeout(r, 2000));
+    // Scroll to the middle of the page just in case the player is lower
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 3));
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Try to click a play button by its text or common classes
+    try {
+      await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+        const playButton = buttons.find(b => b.textContent.includes('Play') || b.classList.contains('vjs-big-play-button') || b.classList.contains('plyr__control'));
+        if (playButton) playButton.click();
+      });
+    } catch (e) { /* ignore */ }
+    
+    await new Promise(r => setTimeout(r, 3000));
 
     const bodyHtml = await page.evaluate(() => document.body.innerHTML).catch(() => 'Could not get body HTML');
     
@@ -66,7 +79,8 @@ export default async function handler(req, res) {
     if (foundStreamUrl) {
       return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
-      const snippet = bodyHtml.substring(0, 1500);
+      // Increase snippet to 4000 chars to see the video player area
+      const snippet = bodyHtml.substring(0, 4000);
       return res.status(404).json({
         success: false,
         error: `Timeout. Requests: ${JSON.stringify(allRequests)} | Body HTML: ${snippet}`
@@ -81,5 +95,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-                                                                }
-        
+          }
+      
