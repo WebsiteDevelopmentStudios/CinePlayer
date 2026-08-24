@@ -105,7 +105,6 @@
 
       const safeStreamUrl = streamUrl.replace(/"/g, '\\"');
 
-      // Native HTML5 player without hls.js
       const playerHtml = `
         <!DOCTYPE html>
         <html>
@@ -115,13 +114,14 @@
             html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
             video { width: 100%; height: 100%; object-fit: contain; }
           </style>
+          <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
         </head>
         <body>
           <video id="v" controls autoplay playsinline></video>
           <script>
             var v = document.getElementById('v');
             var src = "${safeStreamUrl}";
-            v.src = src;
+            var proxyUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(src);
             
             function tryPlay() {
               v.muted = false;
@@ -138,8 +138,26 @@
                 v.addEventListener('touchstart', unmute);
               });
             }
-            
-            v.addEventListener('loadedmetadata', tryPlay);
+
+            if (src.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+              var hls = new Hls();
+              // Load the manifest through the CORS proxy
+              hls.loadSource(proxyUrl);
+              hls.attachMedia(v);
+              
+              hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+              
+              hls.on(Hls.Events.ERROR, function(event, data) {
+                console.error("HLS Error:", data);
+                if (data.fatal) {
+                  hls.destroy();
+                  document.body.innerHTML = '<div style="color:white;font-family:monospace;text-align:center;padding:20px;">CORS Proxy Failed to load the stream.</div>';
+                }
+              });
+            } else {
+              v.src = src;
+              v.addEventListener('loadedmetadata', tryPlay);
+            }
           <\/script>
         </body>
         </html>
