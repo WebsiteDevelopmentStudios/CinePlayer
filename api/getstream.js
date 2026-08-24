@@ -38,6 +38,23 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
+    
+    // STEALTH MODE: Hide the fact that we are a bot
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+      });
+      window.chrome = {
+        runtime: {},
+      };
+    });
+
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
 
     let foundStreamUrl = null;
@@ -53,14 +70,13 @@ export default async function handler(req, res) {
     // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     
-    // Use 'domcontentloaded' so it doesn't hang waiting for networkidle
     await page.goto(movieUrl, {
       waitUntil: 'domcontentloaded',
       timeout: 15000
     }).catch(() => {});
 
-    // Poll for the stream URL for up to 8 seconds
-    for (let i = 0; i < 8; i++) {
+    // Poll for the stream URL for up to 10 seconds
+    for (let i = 0; i < 10; i++) {
       if (foundStreamUrl) break;
       await new Promise(r => setTimeout(r, 1000)); // wait 1 second
     }
@@ -90,5 +106,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-        }
+                                 }
   
