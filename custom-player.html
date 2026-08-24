@@ -38,6 +38,7 @@
       padding: 20px; 
       z-index: 10;
       max-width: 90vw;
+      word-break: break-all;
     }
     
     button {
@@ -87,6 +88,8 @@
       fetch(url).catch(() => {});
       await new Promise(r => setTimeout(r, 1000));
 
+      let lastError = null;
+
       for (let i = 0; i < retries; i++) {
         document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
         try {
@@ -97,35 +100,39 @@
           try {
             data = JSON.parse(text);
           } catch (e) {
-            throw new Error(`Server returned invalid JSON: ${text.substring(0, 150)}`);
+            // Vercel likely returned an error page instead of JSON
+            throw new Error(`Invalid JSON Response: ${text.substring(0, 200)}`);
           }
           
           if (data.streamUrl) {
             return data.streamUrl;
           }
           
-          throw new Error(data.error || "API did not return a streamUrl");
+          throw new Error(data.error || "API did not return streamUrl");
         } catch (e) {
+          lastError = e;
           console.log(`Attempt ${i + 1} failed:`, e.message);
-          document.getElementById('status').innerText = `Retrying... (${e.message})`;
+          document.getElementById('status').innerText = `Attempt ${i + 1} Error:\n${e.message.substring(0, 150)}`;
         }
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 1500));
       }
-      return null;
+      return lastError ? lastError.message : null;
     }
 
     async function init() {
       const statusEl = document.getElementById('status');
       const player = document.getElementById('player');
       
-      const streamUrl = await fetchStream(apiUrl);
+      const fetchResult = await fetchStream(apiUrl);
       
-      if (!streamUrl) {
+      if (!fetchResult || fetchResult.startsWith("Invalid") || fetchResult.includes("Error") || fetchResult.includes("Timeout")) {
         statusEl.style.display = 'block';
         player.style.display = 'none';
-        statusEl.innerHTML = 'Stream failed to load (API Timeout or Crash).<br><button onclick="location.reload()">Reload Player</button>';
+        statusEl.innerHTML = `Stream failed to load.<br><br><small style="opacity:0.7">${fetchResult || 'Unknown Timeout'}</small><br><button onclick="location.reload()" style="margin-top: 20px;">Reload Player</button>`;
         return;
       }
+
+      const streamUrl = fetchResult;
 
       statusEl.style.display = 'none';
       player.style.display = 'block';
