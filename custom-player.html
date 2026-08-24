@@ -67,21 +67,21 @@
     const imdb = getQueryParam('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
-    async function fetchStream(url, retries = 3) {
-      for (let i = 0; i < retries; i++) {
-        document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
-        try {
-          const response = await fetch(url);
-          const data = await response.json();
-          
-          if (response.ok && data.success && data.streamUrl) {
-            return data.streamUrl;
-          }
-          console.log(`Attempt ${i + 1} failed:`, data.error);
-        } catch (e) {
-          console.log(`Network error on attempt ${i + 1}:`, e.message);
+    async function fetchStream(url) {
+      // Warm up the server (Attempt 1 - silent, catches cold start timeout)
+      await fetch(url).catch(() => {});
+      
+      // Immediately fetch again (Attempt 2 - should hit the warm server)
+      document.getElementById('status').innerText = `Fetching stream...`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (response.ok && data.success && data.streamUrl) {
+          return data.streamUrl;
         }
-        await new Promise(r => setTimeout(r, 1500));
+        console.log("Fetch failed:", data.error);
+      } catch (e) {
+        console.log("Network error:", e.message);
       }
       return null;
     }
@@ -116,12 +116,17 @@
       const streamUrl = await fetchStream(apiUrl);
       
       if (!streamUrl) {
-        statusEl.innerHTML = 'Failed to load stream after multiple attempts. It might be blocked temporarily.<br><button onclick="location.reload()">Reload Player</button>';
+        statusEl.innerHTML = 'Failed to load stream. It might be blocked temporarily.<br><button onclick="location.reload()">Reload Player</button>';
         return;
       }
 
       statusEl.style.display = 'none';
       video.style.display = 'block';
+
+      // Global error listener to diagnose the "stuck on loading" issue
+      video.onerror = () => {
+        console.error("Video Error:", video.error);
+      };
 
       // Handle HLS (.m3u8) playback
       if (streamUrl.includes('.m3u8')) {
@@ -132,6 +137,12 @@
           
           hls.on(Hls.Events.ERROR, function(event, data) {
             console.error('HLS Error:', data);
+            // If a fatal error occurs, fallback to direct video assignment
+            if (data.fatal) {
+              console.log("Attempting fallback to direct video source...");
+              hls.destroy();
+              video.src = streamUrl;
+            }
           });
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -140,6 +151,12 @@
           
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           // Native HLS support (Safari)
+          video.src = streamUrl;
+          video.addEventListener('loadedmetadata', () => {
+            startPlayback(video);
+          });
+        } else {
+          // Fallback if HLS is not supported natively
           video.src = streamUrl;
           video.addEventListener('loadedmetadata', () => {
             startPlayback(video);
@@ -157,5 +174,4 @@
     init();
   </script>
 </body>
-  </html>
-  
+</html>
