@@ -68,11 +68,30 @@
     const imdb = getQueryParam('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
+    async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeoutId);
+        return res;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        throw e;
+      }
+    }
+
     async function fetchStream(url, retries = 2) {
+      // Silent warm-up attempt to wake the serverless instance
+      fetch(url).catch(() => {});
+      
+      // Wait 0.5s for the warm-up to register before the real attempts
+      await new Promise(r => setTimeout(r, 500));
+
       for (let i = 0; i < retries; i++) {
         document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
         try {
-          const response = await fetch(url);
+          const response = await fetchWithTimeout(url, {}, 15000);
           const data = await response.json();
           
           if (response.ok && data.success && data.streamUrl) {
@@ -80,9 +99,13 @@
           }
           console.log(`Attempt ${i + 1} failed:`, data.error);
         } catch (e) {
-          console.log(`Network error on attempt ${i + 1}:`, e.message);
+          if (e.name === 'AbortError') {
+            console.log(`Attempt ${i + 1} timed out.`);
+          } else {
+            console.log(`Network error on attempt ${i + 1}:`, e.message);
+          }
         }
-        // Minimal delay to let the serverless instance warm up
+        // Minimal delay before the next try
         await new Promise(r => setTimeout(r, 500));
       }
       return null;
@@ -293,5 +316,4 @@
     init();
   </script>
 </body>
-  </html>
-  
+</html>
