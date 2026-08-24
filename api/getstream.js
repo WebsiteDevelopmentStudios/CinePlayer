@@ -61,7 +61,6 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Broadened to catch .m3u8 OR .mp4 OR sourceplayer URLs
       if ((url.includes('.m3u8') || url.includes('.mp4')) && !url.includes('cineby.hair/_stream')) {
         foundStreamUrl = url;
       }
@@ -73,25 +72,27 @@ export default async function handler(req, res) {
     
     await page.goto(movieUrl, {
       waitUntil: 'domcontentloaded',
-      timeout: 15000
+      timeout: 8000
     }).catch(() => {});
 
     // STEP 4: Try to click the Play button if it exists
     try {
-      // Common streaming site play button selectors
       await page.click('.vjs-big-play-button', { timeout: 2000 });
-    } catch (e) { /* ignore if no button found */ }
+    } catch (e) { /* ignore */ }
     
     try {
       await page.click('button[title="Play"]', { timeout: 2000 });
     } catch (e) { /* ignore */ }
 
-    // STEP 5: Poll for the stream URL for up to 8 seconds
-    for (let i = 0; i < 8; i++) {
+    // STEP 5: Poll for the stream URL for up to 5 seconds
+    for (let i = 0; i < 5; i++) {
       if (foundStreamUrl) break;
-      await new Promise(r => setTimeout(r, 1000)); // wait 1 second
+      await new Promise(r => setTimeout(r, 1000));
     }
 
+    const finalUrl = page.url();
+    const pageTitle = await page.title().catch(() => 'No Title');
+    
     await browser.close();
     browser = null;
 
@@ -104,7 +105,7 @@ export default async function handler(req, res) {
     } else {
       return res.status(404).json({
         success: false,
-        error: "Timeout or could not bypass anti-bot."
+        error: `Timeout. Final URL: ${finalUrl} | Page Title: ${pageTitle}`
       });
     }
 
@@ -117,5 +118,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-      }
+}
   
