@@ -2,30 +2,42 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Disable user zoom and scaling on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Custom Player</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
-    body { 
-      margin: 0; 
+    /* Prevent scrolling and touch actions */
+    html, body { 
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
       background: #000; 
       color: #fff; 
       font-family: Arial, sans-serif; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      justify-content: center; 
-      height: 100vh; 
+      overflow: hidden; 
+      touch-action: none;
+      position: fixed;
     }
+    
+    /* Make video fill the screen */
     video { 
-      max-width: 100%; 
-      max-height: 80vh; 
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain; /* Keeps aspect ratio but fills screen */
       background: #000; 
     }
+    
     #status { 
-      padding: 20px; 
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       text-align: center;
+      padding: 20px; 
     }
+    
     button {
       margin-top: 15px;
       padding: 10px 20px;
@@ -36,6 +48,7 @@
       cursor: pointer;
       font-weight: bold;
     }
+    
     button:hover {
       background: #ccc;
     }
@@ -43,17 +56,15 @@
 </head>
 <body>
   <div id="status">Fetching stream...</div>
-  <video id="video" controls autoplay style="display:none;"></video>
+  <video id="video" controls autoplay playsinline style="display:none;"></video>
 
   <script>
-    // Extract the IMDb ID from the URL parameters (defaulting if not found)
     const getQueryParam = (param) => {
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get(param);
     };
 
     const imdb = getQueryParam('imdb') || 'tt1375666'; 
-    // Note: Make sure this API path matches your serverless function route
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
     async function fetchStream(url, retries = 3) {
@@ -70,10 +81,32 @@
         } catch (e) {
           console.log(`Network error on attempt ${i + 1}:`, e.message);
         }
-        // Wait 1.5 seconds before retrying (gives the headless browser a break)
         await new Promise(r => setTimeout(r, 1500));
       }
       return null;
+    }
+
+    // Helper to handle play logic and unmute fallback
+    function startPlayback(video) {
+      // Try to play unmuted right away
+      video.muted = false;
+      video.play().catch(() => {
+        // If the browser blocks unmuted autoplay, fall back to muted play
+        console.log("Unmuted autoplay blocked by browser. Falling back to muted.");
+        video.muted = true;
+        video.play().catch(err => console.log("Even muted autoplay failed: ", err));
+        
+        // Listen for the first user interaction to unmute it immediately
+        const unmuteOnClick = () => {
+          if (video.muted) {
+            video.muted = false;
+          }
+          video.removeEventListener('click', unmuteOnClick);
+          video.removeEventListener('touchstart', unmuteOnClick);
+        };
+        video.addEventListener('click', unmuteOnClick);
+        video.addEventListener('touchstart', unmuteOnClick);
+      });
     }
 
     async function init() {
@@ -96,21 +129,27 @@
           const hls = new Hls();
           hls.loadSource(streamUrl);
           hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            video.play().catch(e => console.log("Auto-play blocked by browser:", e));
+          
+          hls.on(Hls.Events.ERROR, function(event, data) {
+            console.error('HLS Error:', data);
           });
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            startPlayback(video);
+          });
+          
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           // Native HLS support (Safari)
           video.src = streamUrl;
           video.addEventListener('loadedmetadata', () => {
-            video.play().catch(e => console.log("Auto-play blocked by browser:", e));
+            startPlayback(video);
           });
         }
       } else {
         // Handle direct video playback (.mp4)
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
-          video.play().catch(e => console.log("Auto-play blocked by browser:", e));
+          startPlayback(video);
         });
       }
     }
@@ -118,5 +157,5 @@
     init();
   </script>
 </body>
-    </html>
-    
+  </html>
+  
