@@ -51,15 +51,17 @@ export default async function handler(req, res) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
 
     let foundStreamUrl = null;
-    const streamRequests = []; // Keep track of all video-like requests
+    const allRequests = [];
     
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Catch any video/stream/file related request, no strict exclusions
-      if (url.includes('.m3u8') || url.includes('.mp4') || url.includes('/stream/') || url.includes('/video/') || url.includes('/playlist')) {
+      // Log any api/stream/play requests to see what the site is doing
+      if (url.includes('/api/') || url.includes('/stream/') || url.includes('/play/') || url.includes('/video/')) {
+        allRequests.push(url);
+      }
+      if (url.includes('.m3u8') || url.includes('.mp4')) {
         foundStreamUrl = url;
-        streamRequests.push(url); // Add to our log
       }
       request.continue();
     });
@@ -75,34 +77,27 @@ export default async function handler(req, res) {
     // Wait 2 seconds for the React app to build the video player
     await new Promise(r => setTimeout(r, 2000));
 
-    // STEP 4: Click in the center of the screen to trigger autoplay
+    // Click in the center of the screen
     await page.mouse.click(683, 384);
     
-    // Also try standard play buttons just in case
-    try {
-      await page.click('.vjs-big-play-button', { timeout: 1000 });
-    } catch (e) { /* ignore */ }
+    // Wait another 3 seconds for video to load after click
+    await new Promise(r => setTimeout(r, 3000));
 
-    // STEP 5: Poll for the stream URL for up to 5 seconds
-    for (let i = 0; i < 5; i++) {
-      if (foundStreamUrl) break;
-      await new Promise(r => setTimeout(r, 1000));
-    }
+    // Let's also grab all iFrames and video tags from the HTML
+    const pageHtml = await page.content().catch(() => '');
+    const videoTags = pageHtml.match(/<video[^>]*>/g) || [];
+    const iframeTags = pageHtml.match(/<iframe[^>]*>/g) || [];
     
     await browser.close();
     browser = null;
 
-    // STEP 6: Return the intercepted URL
+    // STEP 6: Return the results
     if (foundStreamUrl) {
-      return res.status(200).json({
-        success: true,
-        streamUrl: foundStreamUrl
-      });
+      return res.status(200).json({ success: true, streamUrl: foundStreamUrl });
     } else {
-      // If it fails, show us the video requests the browser made so we can figure it out
       return res.status(404).json({
         success: false,
-        error: `Timeout. Video Requests Found: ${JSON.stringify(streamRequests)}`
+        error: `Timeout. API Requests: ${JSON.stringify(allRequests)} | Video Tags: ${JSON.stringify(videoTags)} | IFrames: ${JSON.stringify(iframeTags)}`
       });
     }
 
@@ -115,5 +110,4 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-      }
-  
+}
