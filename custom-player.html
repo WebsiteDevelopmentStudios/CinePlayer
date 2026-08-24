@@ -63,10 +63,13 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
+    // Expanded list of reliable public CORS proxies
     const PROXIES = [
       (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url) => `https://proxy.cors.sh/${url}`,
+      (url) => `https://yacdn.org/proxy/${url}`,
       (url) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
       (url) => `https://thingproxy.freeboard.io/fetch/${url}`
     ];
 
@@ -132,8 +135,6 @@
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         }, { once: true });
         
-        // For iOS Safari, we don't easily have control over proxied chunks without a custom JS parser,
-        // so if native fails, we fallback to hls.js
         video.onerror = () => {
           console.log("Native iOS failed, trying HLS.js with proxy...");
           video.removeAttribute('src');
@@ -178,10 +179,10 @@
 
       const timeout = setTimeout(() => {
         if (!started) {
-          console.log("Load timed out, falling back...");
+          console.log(`Timeout: ${useProxy ? 'Proxy ' + proxyIndex : 'Direct'} failed...`);
           fallbackToNextProxy();
         }
-      }, 6000); // 6-second timeout
+      }, 8000); // Increased fallback timeout to 8 seconds
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         started = true;
@@ -194,7 +195,7 @@
           fatalErrors++;
           if (fatalErrors > 3 || !started) {
             clearTimeout(timeout);
-            console.log(`Error using ${useProxy ? 'proxy' : 'direct'}:`, data.details);
+            console.log(`Error using ${useProxy ? 'proxy ' + proxyIndex : 'direct'}:`, data.details);
             fallbackToNextProxy();
           } else {
             // Try to recover from non-fatal or recoverable fatal errors
