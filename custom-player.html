@@ -6,47 +6,18 @@
   <title>Custom Player</title>
   <style>
     html, body { 
-      margin: 0; 
-      padding: 0; 
-      width: 100%; 
-      height: 100%; 
-      background: #000; 
-      color: #fff; 
-      font-family: Arial, sans-serif; 
-      overflow: hidden; 
-      touch-action: none;
-      position: fixed;
+      margin: 0; padding: 0; width: 100%; height: 100%; 
+      background: #000; color: #fff; font-family: Arial, sans-serif; 
+      overflow: hidden; touch-action: none; position: fixed;
     }
-    
-    video { 
-      width: 100vw; 
-      height: 100vh; 
-      object-fit: contain; 
-      background: #000;
-      display: none;
-    }
-    
+    video { width: 100vw; height: 100vh; object-fit: contain; background: #000; display: none; }
     #status { 
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      padding: 20px; 
-      z-index: 10;
-      max-width: 90vw;
-      word-break: break-word;
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; padding: 20px; z-index: 10; max-width: 90vw; word-break: break-word;
     }
-    
     button {
-      margin-top: 15px;
-      padding: 10px 20px;
-      background: #fff;
-      color: #000;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: bold;
+      margin-top: 15px; padding: 10px 20px; background: #fff; color: #000;
+      border: none; border-radius: 5px; cursor: pointer; font-weight: bold;
     }
   </style>
 </head>
@@ -63,19 +34,10 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-    // Expanded list of reliable public CORS proxies
-    const PROXIES = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      (url) => `https://proxy.cors.sh/${url}`,
-      (url) => `https://yacdn.org/proxy/${url}`,
-      (url) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      (url) => `https://thingproxy.freeboard.io/fetch/${url}`
-    ];
+    // Proxy that reliably passes raw text/binary for m3u8 and ts chunks
+    const PROXY_URL = (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
 
-    let proxyIndex = -1; // -1 means direct, 0+ means proxy
     let hls = null;
-    let currentSrc = null;
     let unmuted = false;
 
     const unmute = () => {
@@ -114,40 +76,39 @@
           throw new Error(data.error || "API did not return a stream URL.");
         }
 
-        currentSrc = data.streamUrl;
         statusEl.style.display = 'none';
         video.style.display = 'block';
 
-        startPlayback();
+        await startPlayback(data.streamUrl);
         
       } catch (error) {
         showError(error.message);
       }
     }
 
-    function startPlayback() {
+    async function startPlayback(streamUrl) {
       const isIOS = video.canPlayType('application/vnd.apple.mpegurl');
 
+      // Try native player first for all platforms (Safari works, but sometimes Chrome can play directly if CORS is open initially)
       if (isIOS) {
-        // Apple Native Player
-        video.src = currentSrc;
+        video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         }, { once: true });
         
-        video.onerror = () => {
-          console.log("Native iOS failed, trying HLS.js with proxy...");
+        video.onerror = async () => {
+          console.log("Native iOS failed, trying HLS.js with manifest rewriting...");
           video.removeAttribute('src');
           video.load();
-          startHlsWithProxy();
+          await startHlsWithRewrittenManifest(streamUrl);
         };
       } else {
-        // Desktop / Android using hls.js
-        startHlsWithProxy();
+        await startHlsWithRewrittenManifest(streamUrl);
       }
     }
 
-    function startHlsWithProxy() {
+    // Renderer Logic: Fetch m3u8 text via proxy, rewrite chunk URLs to use proxy, feed as Blob to hls.js
+    async function startHlsWithRewrittenManifest(streamUrl) {
       if (hls) hls.destroy();
 
       if (!window.Hls || !Hls.isSupported()) {
@@ -155,63 +116,67 @@
         return;
       }
 
-      const useProxy = proxyIndex >= 0;
-      const activeProxyFunc = useProxy ? PROXIES[proxyIndex] : null;
+      try {
+        statusEl.style.display = 'block';
+        statusEl.innerText = "Bypassing CORS (Rewriting Manifest)...";
+        
+        // 1. Fetch the raw manifest text through the proxy
+        const proxiedManifestUrl = PROXY_URL(streamUrl);
+        const m3u8Res = await fetch(proxiedManifestUrl);
+        if (!m3u8Res.ok) throw new Error("Failed to load manifest via proxy.");
+        
+        const m3u8Text = await m3u8Res.text();
+        const lines = m3u8Text.split('\n');
 
-      hls = new Hls({
-        maxBufferLength: 30,
-        // Custom loader to intercept XHRs and apply the proxy dynamically
-        loader: class extends Hls.DefaultConfig.loader {
-          load(context, config, callbacks) {
-            if (useProxy && context.url.indexOf('http') === 0) {
-              context.url = activeProxyFunc(context.url);
-            }
-            super.load(context, config, callbacks);
+        // 2. Rewrite every internal URL to go through the proxy
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line && !line.startsWith('#')) {
+            // If it's a relative URL, resolve it against the original stream URL
+            const absoluteUrl = new URL(line, streamUrl).href;
+            lines[i] = PROXY_URL(absoluteUrl);
+          } else if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
+            // Rewrite URI="..." inside tags
+            lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
+              const absoluteUrl = new URL(p1, streamUrl).href;
+              return `URI="${PROXY_URL(absoluteUrl)}"`;
+            });
           }
         }
-      });
 
-      hls.loadSource(currentSrc);
-      hls.attachMedia(video);
+        const rewrittenManifest = lines.join('\n');
 
-      let started = false;
-      let fatalErrors = 0;
+        // 3. Create a local Blob URL from the rewritten manifest
+        const blob = new Blob([rewrittenManifest], { type: 'application/vnd.apple.mpegurl' });
+        const blobUrl = URL.createObjectURL(blob);
 
-      const timeout = setTimeout(() => {
-        if (!started) {
-          console.log(`Timeout: ${useProxy ? 'Proxy ' + proxyIndex : 'Direct'} failed...`);
-          fallbackToNextProxy();
-        }
-      }, 8000); // Increased fallback timeout to 8 seconds
+        statusEl.style.display = 'none';
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        started = true;
-        clearTimeout(timeout);
-        video.play().catch(e => console.log("Autoplay blocked: ", e));
-      });
+        // 4. Hand the Blob URL directly to hls.js (No xhrSetup needed, URLs are already proxied)
+        hls = new Hls({ maxBufferLength: 30 });
+        hls.loadSource(blobUrl);
+        hls.attachMedia(video);
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          fatalErrors++;
-          if (fatalErrors > 3 || !started) {
+        const timeout = setTimeout(() => {
+          showError("Video chunks failed to load via the proxy. Host might be completely blocking proxies.");
+        }, 10000);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          clearTimeout(timeout);
+          video.play().catch(e => console.log("Autoplay blocked: ", e));
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
             clearTimeout(timeout);
-            console.log(`Error using ${useProxy ? 'proxy ' + proxyIndex : 'direct'}:`, data.details);
-            fallbackToNextProxy();
-          } else {
-            // Try to recover from non-fatal or recoverable fatal errors
-            hls.startLoad();
+            console.error("HLS.js FATAL Error:", data.details);
+            showError(`Video chunk error: ${data.details}`);
           }
-        }
-      });
-    }
+        });
 
-    function fallbackToNextProxy() {
-      proxyIndex++;
-      if (proxyIndex >= PROXIES.length) {
-        showError("All CORS proxies failed or are blocked by the host.");
-        return;
+      } catch (error) {
+        showError("Failed to bypass CORS: " + error.message);
       }
-      startHlsWithProxy();
     }
 
     init();
