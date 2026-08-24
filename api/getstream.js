@@ -61,14 +61,16 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      if ((url.includes('.m3u8') || url.includes('.mp4')) && !url.includes('cineby.hair/_stream')) {
+      // Updated to .tech
+      if ((url.includes('.m3u8') || url.includes('.mp4')) && !url.includes('cineby.tech/_stream')) {
         foundStreamUrl = url;
       }
       request.continue();
     });
 
     // STEP 3: Navigate to the movie page and capture the HTTP status
-    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
+    // Updated URL format: /movie/{tmdbId}/watch?autostart=true
+    const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
     
     let httpStatus = 0;
     await page.goto(movieUrl, {
@@ -118,5 +120,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-  }
-      
+      }
+                                                
