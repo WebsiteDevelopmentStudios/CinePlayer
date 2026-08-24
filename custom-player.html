@@ -47,7 +47,7 @@
 
             if (data.success && data.streamUrl) {
                 let streamUrl = data.streamUrl;
-                statusElement.innerText = "Loading video (Proxy)...";
+                statusElement.innerText = "Loading video...";
                 playHLS(streamUrl);
             } else {
                 statusElement.innerText = "Error: " + (data.error || "Could not find stream.");
@@ -59,12 +59,8 @@
 
     function playHLS(originalUrl) {
         if (Hls.isSupported()) {
-            const hls = new Hls({
-                xhrSetup: (xhr, url) => {
-                    // Using allorigins proxy to bypass CORS
-                    xhr.open('GET', `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, true);
-                }
-            });
+            // Removed the proxy to test if it works directly
+            const hls = new Hls();
             
             hls.loadSource(originalUrl);
             hls.attachMedia(videoElement);
