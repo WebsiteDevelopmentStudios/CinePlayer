@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
+    await page.setViewport({ width: 1366, height: 768 });
     
     // STEALTH MODE
     await page.evaluateOnNewDocument(() => {
@@ -61,40 +62,40 @@ export default async function handler(req, res) {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      // Updated to .tech
-      if ((url.includes('.m3u8') || url.includes('.mp4')) && !url.includes('cineby.tech/_stream')) {
+      // Changed to cineby.tech and broadened the match to include /stream/ or index.m3u8
+      if ((url.includes('.m3u8') || url.includes('.mp4') || url.includes('/stream/')) && !url.includes('cineby.tech')) {
         foundStreamUrl = url;
       }
       request.continue();
     });
 
-    // STEP 3: Navigate to the movie page and capture the HTTP status
-    // Updated URL format: /movie/{tmdbId}/watch?autostart=true
+    // STEP 3: Navigate to the movie page
     const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
     
-    let httpStatus = 0;
     await page.goto(movieUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 8000
-    }).then(resp => {
-      if (resp) httpStatus = resp.status();
+      waitUntil: 'load',
+      timeout: 10000
     }).catch(() => {});
 
-    // STEP 4: Try to click the Play button if it exists
-    try {
-      await page.click('.vjs-big-play-button', { timeout: 2000 });
-    } catch (e) { /* ignore */ }
+    // Wait 2 seconds for the React app to build the video player
+    await new Promise(r => setTimeout(r, 2000));
+
+    // STEP 4: Click in the center of the screen to trigger autoplay
+    await page.mouse.click(683, 384);
     
+    // Also try standard play buttons just in case
     try {
-      await page.click('button[title="Play"]', { timeout: 2000 });
+      await page.click('.vjs-big-play-button', { timeout: 1000 });
     } catch (e) { /* ignore */ }
 
-    // STEP 5: Poll for the stream URL for up to 4 seconds
-    for (let i = 0; i < 4; i++) {
+    // STEP 5: Poll for the stream URL for up to 7 seconds
+    for (let i = 0; i < 7; i++) {
       if (foundStreamUrl) break;
       await new Promise(r => setTimeout(r, 1000));
     }
 
+    const pageTitle = await page.title().catch(() => 'No Title');
+    
     await browser.close();
     browser = null;
 
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
     } else {
       return res.status(404).json({
         success: false,
-        error: `Timeout. HTTP Status: ${httpStatus}`
+        error: `Timeout. Page Title: ${pageTitle}`
       });
     }
 
@@ -120,5 +121,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-      }
-                                                
+}
+  
