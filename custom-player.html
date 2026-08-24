@@ -37,6 +37,7 @@
       text-align: center;
       padding: 20px; 
       z-index: 10;
+      max-width: 90vw;
     }
     
     button {
@@ -68,7 +69,7 @@
     const imdb = getQueryParam('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
 
-    async function fetchWithTimeout(url, options = {}, timeout = 15000) {
+    async function fetchWithTimeout(url, options = {}, timeout = 14000) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       try {
@@ -84,29 +85,31 @@
     async function fetchStream(url, retries = 2) {
       // Silent warm-up attempt to wake the serverless instance
       fetch(url).catch(() => {});
-      
-      // Wait 0.5s for the warm-up to register before the real attempts
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 1000));
 
       for (let i = 0; i < retries; i++) {
         document.getElementById('status').innerText = `Fetching stream... (Attempt ${i + 1} of ${retries})`;
         try {
-          const response = await fetchWithTimeout(url, {}, 15000);
-          const data = await response.json();
+          const response = await fetchWithTimeout(url, {}, 14000);
+          const text = await response.text();
+          let data;
           
-          if (response.ok && data.success && data.streamUrl) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            throw new Error(`Server returned invalid JSON: ${text.substring(0, 150)}`);
+          }
+          
+          if (data.streamUrl) {
             return data.streamUrl;
           }
-          console.log(`Attempt ${i + 1} failed:`, data.error);
+          
+          throw new Error(data.error || "API did not return a streamUrl");
         } catch (e) {
-          if (e.name === 'AbortError') {
-            console.log(`Attempt ${i + 1} timed out.`);
-          } else {
-            console.log(`Network error on attempt ${i + 1}:`, e.message);
-          }
+          console.log(`Attempt ${i + 1} failed:`, e.message);
+          document.getElementById('status').innerText = `Retrying... (${e.message})`;
         }
-        // Minimal delay before the next try
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
       }
       return null;
     }
@@ -120,7 +123,7 @@
       if (!streamUrl) {
         statusEl.style.display = 'block';
         player.style.display = 'none';
-        statusEl.innerHTML = 'Stream failed to load (API Timeout).<br><button onclick="location.reload()">Reload Player</button>';
+        statusEl.innerHTML = 'Stream failed to load (API Timeout or Crash).<br><button onclick="location.reload()">Reload Player</button>';
         return;
       }
 
@@ -171,7 +174,6 @@
             var hlsTimeout;
             var hasStarted = false;
             
-            // Array of proxy functions to bypass CORS recursively
             var proxies = [
               function(url) { return 'https://corsproxy.io/?url=' + encodeURIComponent(url); },
               function(url) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url); },
@@ -212,7 +214,6 @@
                   tryPlay();
                 });
                 
-                // Fallback Setup: If it takes longer than 4 seconds, bypass to proxy
                 hlsTimeout = setTimeout(function() {
                   if (!hasStarted) {
                     console.log("Direct load too slow, falling back to proxy...");
@@ -272,7 +273,6 @@
 
             if (src.includes('.m3u8')) {
               if (isIOS) {
-                // Native Player (iPhone/iPad)
                 v.src = src;
                 v.addEventListener('loadedmetadata', function() {
                   hasStarted = true;
@@ -286,7 +286,6 @@
                   startDirectHls();
                 };
                 
-                // Timeout Fallback for native
                 hlsTimeout = setTimeout(function() {
                   if (!hasStarted) {
                     console.log("Native iOS load too slow, falling back to HLS.js direct...");
@@ -296,11 +295,9 @@
                   }
                 }, 4000);
               } else {
-                // Direct HLS (Desktop/Android) with aggressive 4s fallback
                 startDirectHls();
               }
             } else {
-              // MP4s
               v.src = src;
               v.addEventListener('loadedmetadata', tryPlay);
               v.onerror = failStream;
@@ -316,4 +313,5 @@
     init();
   </script>
 </body>
-</html>
+  </html>
+  
