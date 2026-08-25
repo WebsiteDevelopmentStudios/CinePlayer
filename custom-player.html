@@ -41,7 +41,7 @@
     const statusEl = document.getElementById('status');
 
     // Your own local Vercel proxy (Must be absolute with cache-buster to prevent Blob URL path issues)
-    const PROXY_URL = (url) => `${window.location.origin}/api/proxy?url=${encodeURIComponent(url)}&_=${Date.now()}`;
+    const PROXY_URL = (url) => `${window.location.origin}/api/stream?url=${encodeURIComponent(url)}&_=${Date.now()}`;
 
     let hls = null;
     let unmuted = false;
