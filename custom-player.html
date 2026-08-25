@@ -167,13 +167,13 @@
           clearTimeout(timeout);
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         });
-
+          
         hls.on(Hls.Events.ERROR, (event, data) => {
           if (data.details && data.details.includes('aborted')) return;
           if (data.fatal) {
             clearTimeout(timeout);
-            console.error("HLS.js FATAL Error:", data.details);
-            showError(`Video chunk error: ${data.details}`);
+            console.error("HLS.js FATAL Error:", data.details, "URL:", data.url);
+            showError(`Playback Error: ${data.details}<br><br><small style="opacity:0.5">Failing URL: ${data.url || 'N/A'}</small>`);
           }
         });
 
