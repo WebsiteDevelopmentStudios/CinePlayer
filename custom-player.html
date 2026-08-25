@@ -27,6 +27,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
+    // Gracefully suppress "signal is aborted without reason" caused by HLS.js dynamic chunk unloading
+    window.addEventListener('unhandledrejection', event => {
+      if (event.reason && (event.reason.name === 'AbortError' || /aborted/i.test(event.reason.message || ''))) {
+        event.preventDefault();
+      }
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const imdb = urlParams.get('imdb') || 'tt1375666'; 
     const apiUrl = `/api/getstream?imdb=${imdb}`;
@@ -34,13 +41,8 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-    // Multiple proxy fallbacks to prevent getting stuck on chunk loading
-    const PROXIES = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      (url) => `https://thingproxy.freeboard.io/fetch/${url}`
-    ];
-    const PROXY_URL = PROXIES[0]; // Fall back to corsproxy.io
+    // Proxy that reliably passes raw text/binary for m3u8 and ts chunks
+    const PROXY_URL = (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
 
     let hls = null;
     let unmuted = false;
@@ -62,30 +64,27 @@
     }
 
     async function init() {
+      // Silent warmup
+      fetch(apiUrl).catch(() => {});
+      
       try {
         statusEl.innerText = "Fetching stream...";
-        
-        // Abort request if /api/getstream takes longer than 10 seconds
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
-        const res = await fetch(apiUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        
-        if (!res.ok) throw new Error(`API responded with status: ${res.status}`);
-        
+        const res = await fetch(apiUrl);
         const text = await res.text();
-        let data;
         
+        let data;
         try {
             data = JSON.parse(text);
         } catch (e) {
-            throw new Error(`API Response was not JSON. Got: ${text.substring(0, 100)}`);
+            throw new Error(`API Response: ${text.substring(0, 150)}`);
         }
         
         if (!data.streamUrl) {
           throw new Error(data.error || "API did not return a stream URL.");
         }
+
+        statusEl.style.display = 'none';
+        video.style.display = 'block';
 
         await startPlayback(data.streamUrl);
         
@@ -95,19 +94,17 @@
     }
 
     async function startPlayback(streamUrl) {
-      const isIOS = video.canPlayType('application/vnd.apple.mpegurl');
-      statusEl.style.display = 'none'; // Hide status before native player mounts
-      video.style.display = 'block';
+      const supportsNative = video.canPlayType('application/vnd.apple.mpegurl');
 
-      // Try native player first (Mainly Safari)
-      if (isIOS) {
+      // Try native player first for all platforms (Safari works, but sometimes Chrome can play directly if CORS is open initially)
+      if (supportsNative) {
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         }, { once: true });
         
         video.onerror = async () => {
-          console.log("Native failed, trying HLS.js...");
+          console.log("Native playback failed, trying HLS.js with manifest rewriting...");
           video.removeAttribute('src');
           video.load();
           await startHlsWithRewrittenManifest(streamUrl);
@@ -128,28 +125,25 @@
 
       try {
         statusEl.style.display = 'block';
-        statusEl.innerText = "Bypassing CORS via Proxy...";
+        statusEl.innerText = "Bypassing CORS (Rewriting Manifest)...";
         
+        // 1. Fetch the raw manifest text through the proxy
         const proxiedManifestUrl = PROXY_URL(streamUrl);
-        
-        // Abort proxy fetch if it takes too long
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        const m3u8Res = await fetch(proxiedManifestUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        
-        if (!m3u8Res.ok) throw new Error(`Proxy returned status ${m3u8Res.status}`);
+        const m3u8Res = await fetch(proxiedManifestUrl);
+        if (!m3u8Res.ok) throw new Error("Failed to load manifest via proxy.");
         
         const m3u8Text = await m3u8Res.text();
         const lines = m3u8Text.split('\n');
 
-        // Rewrite internal URLs to go through the proxy
+        // 2. Rewrite every internal URL to go through the proxy
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (line && !line.startsWith('#')) {
+            // If it's a relative URL, resolve it against the original stream URL
             const absoluteUrl = new URL(line, streamUrl).href;
             lines[i] = PROXY_URL(absoluteUrl);
           } else if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
+            // Rewrite URI="..." inside tags
             lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
               const absoluteUrl = new URL(p1, streamUrl).href;
               return `URI="${PROXY_URL(absoluteUrl)}"`;
@@ -158,18 +152,26 @@
         }
 
         const rewrittenManifest = lines.join('\n');
+
+        // 3. Create a local Blob URL from the rewritten manifest
         const blob = new Blob([rewrittenManifest], { type: 'application/vnd.apple.mpegurl' });
         const blobUrl = URL.createObjectURL(blob);
 
-        statusEl.style.display = 'none'; // Hide status to let video buffer play out
+        statusEl.style.display = 'none';
 
-        hls = new Hls({ maxBufferLength: 30 });
+        // 4. Hand the Blob URL directly to hls.js (No xhrSetup needed, URLs are already proxied)
+        // Enable XhrLoader explicitly or ensure fetch aborts don't fatal out
+        hls = new Hls({ 
+          maxBufferLength: 30,
+          enableWorker: true
+        });
+        
         hls.loadSource(blobUrl);
         hls.attachMedia(video);
 
         const timeout = setTimeout(() => {
-          showError("Video chunks failed to load. The host may be actively blocking proxy servers.");
-        }, 15000);
+          showError("Video chunks failed to load via the proxy. Host might be completely blocking proxies.");
+        }, 10000);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           clearTimeout(timeout);
@@ -177,10 +179,14 @@
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
+          // Ignore benign network aborts initiated by hls.js itself (buffer full / seek / switch)
+          if (data.details && data.details.includes('aborted')) {
+            return;
+          }
           if (data.fatal) {
             clearTimeout(timeout);
             console.error("HLS.js FATAL Error:", data.details);
-            showError(`Playback Error: ${data.details}`);
+            showError(`Video chunk error: ${data.details}`);
           }
         });
 
@@ -193,3 +199,4 @@
   </script>
 </body>
 </html>
+  
