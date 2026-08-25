@@ -1,53 +1,61 @@
 // api/proxy.js
-export default async function handler(req, res) {
-  const targetUrl = req.query.url;
+
+// Tell Vercel to run this on the Edge (No 15-second timeout!)
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(req) {
+  const url = new URL(req.url);
+  const targetUrl = url.searchParams.get('url');
   
   if (!targetUrl) {
-    return res.status(400).json({ error: 'Missing url parameter' });
+    return new Response('Missing url parameter', { status: 400 });
   }
 
   try {
     const parsedUrl = new URL(targetUrl);
     const referer = `${parsedUrl.protocol}//${parsedUrl.host}/`;
 
-    const headers = new Headers();
+    // Pass through the incoming request headers (like 'Range')
+    const headers = new Headers(req.headers);
     headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     headers.set('Referer', referer);
     headers.set('Origin', referer);
 
-    if (req.headers.range) {
-      headers.set('Range', req.headers.range);
-    }
+    // Fetch the stream
+    const response = await fetch(targetUrl, { 
+      headers, 
+      redirect: 'follow' 
+    });
 
-    const response = await fetch(targetUrl, { headers, redirect: 'follow' });
+    // Clone the response and add CORS / No-Cache headers
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Access-Control-Allow-Origin', '*');
+    newHeaders.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    newHeaders.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+    newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    newHeaders.set('Pragma', 'no-cache');
 
-    // Explicitly prevent Vercel from caching streaming data
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
-    
+    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-      return res.status(200).end();
+      return new Response(null, { status: 200, headers: newHeaders });
     }
 
-    const contentType = response.headers.get('content-type');
-    if (contentType) res.setHeader('Content-Type', contentType);
-
-    const contentLength = response.headers.get('content-length');
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-
-    const contentRange = response.headers.get('content-range');
-    if (contentRange) res.setHeader('Content-Range', contentRange);
-
-    const buffer = await response.arrayBuffer();
-    return res.status(response.status).send(Buffer.from(buffer));
+    // Stream the binary data directly back to the browser infinitely
+    return new Response(response.body, {
+      status: response.status,
+      headers: newHeaders
+    });
 
   } catch (error) {
-    console.error('Proxy Error:', error);
-    return res.status(500).json({ error: 'Proxy fetch failed', details: error.message });
+    return new Response(JSON.stringify({ 
+      error: 'Proxy fetch failed', 
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-      }
+        }
       
