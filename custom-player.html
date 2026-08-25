@@ -150,7 +150,12 @@
 
         statusEl.style.display = 'none';
 
-        hls = new Hls({ maxBufferLength: 30 });
+        hls = new Hls({ 
+  maxBufferLength: 30,
+  fragLoadingMaxRetry: 5,
+  fragLoadingRetryDelay: 1000,
+  manifestLoadingMaxRetry: 4
+});
         hls.loadSource(blobUrl);
         hls.attachMedia(video);
 
