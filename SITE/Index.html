@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CinePlayer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #141414;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        header {
+            width: 100%;
+            padding: 20px 50px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(5px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid #333;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #e50914;
+            text-decoration: none;
+        }
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin-left: 20px;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+        }
+        nav a:hover {
+            color: #e50914;
+        }
+        .hero {
+            padding: 60px 50px 20px 50px;
+        }
+        .hero h1 {
+            font-size: 2.5rem;
+            margin: 0 0 10px 0;
+        }
+        .hero p {
+            color: #b3b3b3;
+            margin: 0;
+        }
+        .movie-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 25px;
+            padding: 20px 50px 50px 50px;
+        }
+        .movie-card {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            position: relative;
+        }
+        .movie-card:hover {
+            transform: scale(1.08);
+            z-index: 10;
+        }
+        .poster-container {
+            width: 100%;
+            aspect-ratio: 2 / 3;
+            background: #2a2a2a;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 0.9rem;
+            transition: box-shadow 0.3s;
+        }
+        .movie-card:hover .poster-container {
+            box-shadow: 0 8px 20px rgba(229, 9, 20, 0.3);
+        }
+        .poster-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .movie-card h3 {
+            font-size: 0.9rem;
+            margin: 8px 0 0 0;
+            color: #e5e5e5;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #fallback {
+            text-align: center;
+            padding: 80px 20px;
+            display: none;
+        }
+        #fallback p {
+            margin-bottom: 20px;
+        }
+        #fallback input {
+            padding: 10px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #fff;
+        }
+        .disclaimer {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #555;
+            max-width: 800px;
+            text-align: center;
+            margin: 0 auto 50px auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="index.html" class="logo">▶ CinePlayer</a>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="profile.html">Support Profile</a>
+        </nav>
+    </header>
+
+    <div class="hero">
+        <h1>Movies & Series</h1>
+        <p>Select a title below to start streaming instantly.</p>
+    </div>
+
+    <div id="movie-grid" class="movie-grid"></div>
+    
+    <div id="fallback">
+        <p>Could not automatically load <strong>imdb.txt</strong>.<br>
+        If you are opening this file directly from your computer, browsers block local file reading. Please select your file manually:</p>
+        <input type="file" id="fileInput" accept=".txt">
+    </div>
+
+    <div class="disclaimer">
+        <strong>Disclaimer:</strong><br>
+        This tool does not host, upload, or store any content. All video streams are provided by third-party providers. CinePlayer is not responsible for the accuracy, compliance, copyright, or any other aspect of the content provided by these third parties.
+    </div>
+
+    <script>
+        // Replace with your own OMDb API key if you hit rate limits on 300+ movies.
+        const OMDB_API_KEY = '8b18e18c'; 
+
+        async function fetchMovies() {
+            try {
+                const response = await fetch('imdb.txt');
+                if (!response.ok) throw new Error("File not found");
+                const text = await response.text();
+                processText(text);
+            } catch (err) {
+                // Fallback if opened directly as a file:// protocol
+                document.getElementById('fallback').style.display = 'block';
+            }
+        }
+
+        // File input fallback
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    processText(e.target.result);
+                    document.getElementById('fallback').style.display = 'none';
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function processText(text) {
+            const lines = text.split('\n');
+            const grid = document.getElementById('movie-grid');
+            const imdbIds = [];
+            
+            // Extract unique IMDb IDs
+            lines.forEach(line => {
+                const match = line.match(/(tt\d+)/);
+                if (match && match[1] && !imdbIds.includes(match[1])) {
+                    imdbIds.push(match[1]);
+                }
+            });
+
+            // Generate Cards
+            imdbIds.forEach(id => {
+                const card = document.createElement('div');
+                card.className = 'movie-card';
+                card.onclick = () => {
+                    window.location.href = `custom-player.html?imdb=${id}`;
+                };
+                
+                card.innerHTML = `
+                    <div class="poster-container">Loading...</div>
+                    <h3>${id}</h3>
+                `;
+                
+                grid.appendChild(card);
+                
+                // Fetch Title and Poster Dynamically
+                fetch(`https://www.omdbapi.com/?i=${id}&apikey=${OMDB_API_KEY}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const titleEl = card.querySelector('h3');
+                        const posterContainer = card.querySelector('.poster-container');
+                        
+                        if (data.Response === "True") {
+                            titleEl.textContent = data.Title;
+                            if (data.Poster && data.Poster !== "N/A") {
+                                posterContainer.innerHTML = `<img src="${data.Poster}" alt="${data.Title}">`;
+                            } else {
+                                posterContainer.innerHTML = 'No Poster';
+                            }
+                        } else {
+                            titleEl.textContent = `Unknown (${id})`;
+                            posterContainer.innerHTML = 'N/A';
+                        }
+                    }).catch(() => {
+                        card.querySelector('.poster-container').innerHTML = 'Error';
+                        card.querySelector('h3').textContent = `Error (${id})`;
+                    });
+            });
+        }
+
+        // Initiate scanning for the file
+        fetchMovies();
+    </script>
+
+</body>
+    </html>
+    
