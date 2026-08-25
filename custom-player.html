@@ -40,8 +40,8 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-// Your own local Vercel proxy (Must be absolute to prevent Blob URL path issues)
-    const PROXY_URL = (url) => `${window.location.origin}/api/proxy?url=${encodeURIComponent(url)}`;
+// Your own local Vercel proxy
+const PROXY_URL = (url) => `${window.location.origin}/api/proxy?url=${encodeURIComponent(url)}&_=${Date.now()}`;
 
     let hls = null;
     let unmuted = false;
