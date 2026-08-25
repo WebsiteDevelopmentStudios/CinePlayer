@@ -7,7 +7,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Automatically match the Referer to the domain of the video chunk
     const parsedUrl = new URL(targetUrl);
     const referer = `${parsedUrl.protocol}//${parsedUrl.host}/`;
 
@@ -16,15 +15,13 @@ export default async function handler(req, res) {
     headers.set('Referer', referer);
     headers.set('Origin', referer);
 
-    // Forward the Range header if hls.js requests it (crucial for .ts chunks)
     if (req.headers.range) {
       headers.set('Range', req.headers.range);
     }
 
-    // Fetch the stream/playlist
-    const response = await fetch(targetUrl, { headers });
+    // Explicitly set redirect to follow, as some sub-playlists redirect
+    const response = await fetch(targetUrl, { headers, redirect: 'follow' });
 
-    // Allow CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
@@ -33,7 +30,6 @@ export default async function handler(req, res) {
       return res.status(200).end();
     }
 
-    // Copy essential headers for video streaming
     const contentType = response.headers.get('content-type');
     if (contentType) res.setHeader('Content-Type', contentType);
 
@@ -43,7 +39,6 @@ export default async function handler(req, res) {
     const contentRange = response.headers.get('content-range');
     if (contentRange) res.setHeader('Content-Range', contentRange);
 
-    // Return the binary chunk buffer
     const buffer = await response.arrayBuffer();
     return res.status(response.status).send(Buffer.from(buffer));
 
@@ -51,5 +46,4 @@ export default async function handler(req, res) {
     console.error('Proxy Error:', error);
     return res.status(500).json({ error: 'Proxy fetch failed', details: error.message });
   }
-      }
-      
+}
