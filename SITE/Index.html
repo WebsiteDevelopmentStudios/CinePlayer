@@ -154,7 +154,7 @@
     </div>
 
     <script>
-        // Replace with your own OMDb API key if you hit rate limits on 300+ movies.
+        // OMDb API Key is used for fetching movie posters.
         const OMDB_API_KEY = '8b18e18c'; 
 
         async function fetchMovies() {
@@ -183,20 +183,25 @@
         });
 
         function processText(text) {
-            const lines = text.split('\n');
+            const lines = text.split('\n').filter(line => line.trim() !== '');
             const grid = document.getElementById('movie-grid');
-            const imdbIds = [];
+            grid.innerHTML = ''; // Clear loading states
             
-            // Extract unique IMDb IDs
             lines.forEach(line => {
                 const match = line.match(/(tt\d+)/);
-                if (match && match[1] && !imdbIds.includes(match[1])) {
-                    imdbIds.push(match[1]);
+                if (!match || !match[1]) return;
+                
+                const id = match[1];
+                let title = id; // Fallback to ID if title is missing
+                
+                // Extract title if it follows the "ID | Title" format
+                if (line.includes('|')) {
+                    const parts = line.split('|');
+                    if (parts.length > 1) {
+                        title = parts.slice(1).join('|').trim();
+                    }
                 }
-            });
 
-            // Generate Cards
-            imdbIds.forEach(id => {
                 const card = document.createElement('div');
                 card.className = 'movie-card';
                 card.onclick = () => {
@@ -205,32 +210,24 @@
                 
                 card.innerHTML = `
                     <div class="poster-container">Loading...</div>
-                    <h3>${id}</h3>
+                    <h3>${title}</h3>
                 `;
                 
                 grid.appendChild(card);
                 
-                // Fetch Title and Poster Dynamically
+                const posterContainer = card.querySelector('.poster-container');
+
+                // Fetch the Poster Dynamically
                 fetch(`https://www.omdbapi.com/?i=${id}&apikey=${OMDB_API_KEY}`)
                     .then(res => res.json())
                     .then(data => {
-                        const titleEl = card.querySelector('h3');
-                        const posterContainer = card.querySelector('.poster-container');
-                        
-                        if (data.Response === "True") {
-                            titleEl.textContent = data.Title;
-                            if (data.Poster && data.Poster !== "N/A") {
-                                posterContainer.innerHTML = `<img src="${data.Poster}" alt="${data.Title}">`;
-                            } else {
-                                posterContainer.innerHTML = 'No Poster';
-                            }
+                        if (data.Response === "True" && data.Poster && data.Poster !== "N/A") {
+                            posterContainer.innerHTML = `<img src="${data.Poster}" alt="${title}">`;
                         } else {
-                            titleEl.textContent = `Unknown (${id})`;
-                            posterContainer.innerHTML = 'N/A';
+                            posterContainer.innerHTML = `No Poster`;
                         }
                     }).catch(() => {
-                        card.querySelector('.poster-container').innerHTML = 'Error';
-                        card.querySelector('h3').textContent = `Error (${id})`;
+                        posterContainer.innerHTML = `Error`;
                     });
             });
         }
@@ -241,4 +238,4 @@
 
 </body>
     </html>
-    
+        
