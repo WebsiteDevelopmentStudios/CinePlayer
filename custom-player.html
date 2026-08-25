@@ -130,17 +130,21 @@ const PROXY_URL = (url) => `${window.location.origin}/api/proxy?url=${encodeURIC
         const m3u8Text = await m3u8Res.text();
         const lines = m3u8Text.split('\n');
 
-        // 2. Rewrite every internal URL to go through your Vercel proxy
+                // 2. Rewrite every internal URL to go through your Vercel proxy
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (line && !line.startsWith('#')) {
+            // Plain standalone URLs
             const absoluteUrl = new URL(line, streamUrl).href;
             lines[i] = PROXY_URL(absoluteUrl);
-          } else if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
-            lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
-              const absoluteUrl = new URL(p1, streamUrl).href;
-              return `URI="${PROXY_URL(absoluteUrl)}"`;
-            });
+          } else if (line.startsWith('#')) {
+            // Catches ANY tag containing URI="..." (EXT-X-KEY, EXT-X-MAP, EXT-X-MEDIA, etc.)
+            if (line.includes('URI="')) {
+              lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
+                const absoluteUrl = new URL(p1, streamUrl).href;
+                return `URI="${PROXY_URL(absoluteUrl)}"`;
+              });
+            }
           }
         }
 
