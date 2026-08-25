@@ -1,0 +1,354 @@
+tt0111161 | The Shawshank Redemption
+tt0068646 | The Godfather
+tt0468569 | The Dark Knight
+tt0071562 | The Godfather Part II
+tt0050083 | 12 Angry Men
+tt0108052 | Schindler's List
+tt0167260 | The Lord of the Rings: The Return of the King
+tt0110912 | Pulp Fiction
+tt0120737 | The Lord of the Rings: The Fellowship of the Ring
+tt0060196 | The Good, the Bad and the Ugly
+tt0137523 | Fight Club
+tt0109830 | Forrest Gump
+tt0080684 | The Empire Strikes Back
+tt1375666 | Inception
+tt0167261 | The Lord of the Rings: The Two Towers
+tt0099685 | Goodfellas
+tt0073486 | One Flew Over the Cuckoo's Nest
+tt0133093 | The Matrix
+tt0114369 | Se7en
+tt0816692 | Interstellar
+tt0102926 | The Silence of the Lambs
+tt0034583 | Casablanca
+tt0120815 | Saving Private Ryan
+tt0088763 | Back to the Future
+tt0076759 | Star Wars: A New Hope
+tt0103064 | Terminator 2: Judgment Day
+tt0118799 | Life Is Beautiful
+tt0245429 | Spirited Away
+tt0120689 | The Green Mile
+tt6751668 | Parasite
+tt0110413 | Léon: The Professional
+tt0253474 | The Pianist
+tt0172495 | Gladiator
+tt0114814 | The Usual Suspects
+tt0407887 | The Departed
+tt2582802 | Whiplash
+tt0482571 | The Prestige
+tt0120586 | American History X
+tt0110357 | The Lion King
+tt1853728 | Django Unchained
+tt1345836 | The Dark Knight Rises
+tt0993846 | The Wolf of Wall Street
+tt0435761 | Toy Story 3
+tt4154796 | Avengers: Endgame
+tt4154756 | Avengers: Infinity War
+tt7286456 | Joker
+tt1745960 | Top Gun: Maverick
+tt1517268 | Barbie
+tt15398776 | Oppenheimer
+tt0114709 | Toy Story
+tt0120363 | Toy Story 2
+tt0317705 | The Incredibles
+tt0910970 | WALL-E
+tt1049413 | Up
+tt2096673 | Inside Out
+tt2380307 | Coco
+tt4633694 | Spider-Man: Into the Spider-Verse
+tt9362722 | Spider-Man: Across the Spider-Verse
+tt0116629 | Independence Day
+tt0139654 | Training Day
+tt0105236 | Reservoir Dogs
+tt0095765 | Cinema Paradiso
+tt0112573 | Braveheart
+tt0120338 | Titanic
+tt0121766 | Star Wars: Episode III - Revenge of the Sith
+tt0083866 | E.T. the Extra-Terrestrial
+tt0082971 | Raiders of the Lost Ark
+tt0097576 | Indiana Jones and the Last Crusade
+tt0107290 | Jurassic Park
+tt0369610 | Jurassic World
+tt0499549 | Avatar
+tt1630029 | Avatar: The Way of Water
+tt0372784 | Batman Begins
+tt1877830 | The Batman
+tt0106977 | The Fugitive
+tt0209144 | Memento
+tt0361748 | Inglourious Basterds
+tt1130884 | Shutter Island
+tt0120735 | The Fifth Element
+tt0180093 | Requiem for a Dream
+tt0246578 | Donnie Darko
+tt0119217 | Good Will Hunting
+tt0325980 | Pirates of the Caribbean: The Curse of the Black Pearl
+tt0449088 | Pirates of the Caribbean: At World's End
+tt0417741 | Harry Potter and the Half-Blood Prince
+tt1201607 | Harry Potter and the Deathly Hallows: Part 2
+tt0259446 | My Big Fat Greek Wedding
+tt0338013 | Eternal Sunshine of the Spotless Mind
+tt0054215 | Psycho
+tt0103639 | Aladdin
+tt0266543 | Finding Nemo
+tt0317219 | Cars
+tt1048185 | A Beautiful Mind
+tt0113243 | The Lion King
+tt0120685 | The Green Mile
+tt0073195 | Jaws
+tt0078788 | Apocalypse Now
+tt0070047 | The Exorcist
+tt0071853 | Monty Python and the Holy Grail
+tt0081505 | The Shining
+tt0088847 | The Princess Bride
+tt0090605 | Aliens
+tt0091251 | Indiana Jones and the Temple of Doom
+tt0095016 | Die Hard
+tt0095953 | Rain Man
+tt0096895 | Batman
+tt0101414 | Beauty and the Beast
+tt0107048 | Groundhog Day
+tt0112471 | Before Sunrise
+tt0112641 | Casino
+tt0116282 | Fargo
+tt0118715 | The Big Lebowski
+tt0118843 | The Truman Show
+tt0120382 | The Truman Show
+tt0120915 | Star Wars: Episode I - The Phantom Menace
+tt0121765 | Star Wars: Episode II - Attack of the Clones
+tt0167404 | The Sixth Sense
+tt0198781 | Monsters, Inc.
+tt0241527 | Harry Potter and the Sorcerer's Stone
+tt0242653 | The Matrix Reloaded
+tt0266697 | Kill Bill: Vol. 1
+tt0278504 | American Pie 2
+tt0281358 | Any Given Sunday
+tt0299658 | Chicago
+tt0317248 | The Fast and the Furious
+tt0332280 | The Notebook
+tt0335266 | Lost in Translation
+tt0363771 | The Terminal
+tt0364569 | Oldboy
+tt0373889 | The Chronicles of Narnia: The Lion, the Witch and the Wardrobe
+tt0378194 | Kill Bill: Vol. 2
+tt0382932 | Ratatouille
+tt0398286 | Tangled
+tt0413267 | The Devil Wears Prada
+tt0434409 | V for Vendetta
+tt0454876 | Life of Pi
+tt0477348 | No Country for Old Men
+tt0780504 | Drive
+tt0848228 | The Avengers
+tt0903624 | The Hobbit: An Unexpected Journey
+tt1205489 | Gran Torino
+tt1210166 | Moneyball
+tt1255953 | The Impossible
+tt1454468 | Gravity
+tt1637725 | Ted
+tt1670345 | Now You See Me
+tt1950186 | Ford v Ferrari
+tt2015381 | Guardians of the Galaxy
+tt2084970 | The Imitation Game
+tt2106476 | The Hunt
+tt2527336 | Star Wars: The Rise of Skywalker
+tt2948356 | Zootopia
+tt3315342 | Logan
+tt3469046 | Despicable Me 3
+tt3501632 | Thor: Ragnarok
+tt4912910 | Mission: Impossible - Fallout
+tt5095030 | Ant-Man and the Wasp
+tt7975244 | Jumanji: Welcome to the Jungle
+tt8579674 | 1917
+tt8946378 | Knives Out
+tt9411972 | Where the Crawdads Sing
+tt10872600 | Spider-Man: No Way Home
+tt10954984 | No Time to Die
+tt1160419 | Dune
+tt6710474 | Everything Everywhere All at Once
+tt14230458 | Poor Things
+tt15239678 | Dune: Part Two
+tt1757678 | Avatar: The Way of Water
+tt6264654 | Free Guy
+tt5433140 | Fast & Furious 9
+tt5433138 | F9: The Fast Saga
+tt1392190 | Mad Max: Fury Road
+tt0926084 | Harry Potter and the Deathly Hallows: Part 1
+tt0304141 | Harry Potter and the Prisoner of Azkaban
+tt0330373 | Harry Potter and the Goblet of Fire
+tt0452623 | Harry Potter and the Order of the Phoenix
+tt0088247 | The Terminator
+tt0113277 | Heat
+tt0114388 | Scream
+tt0120804 | Resident Evil
+tt0213149 | Pearl Harbor
+tt0187393 | The Patriot
+tt0120663 | Eyes Wide Shut
+tt0134119 | The Talented Mr. Ripley
+tt0169547 | American Beauty
+tt0120684 | The Green Mile
+tt0145487 | Spider-Man
+tt0316654 | Spider-Man 2
+tt0413300 | Spider-Man 3
+tt0948470 | The Amazing Spider-Man
+tt1872181 | The Amazing Spider-Man 2
+tt2250912 | Spider-Man: Homecoming
+tt6320628 | Spider-Man: Far From Home
+tt0146838 | American Pie
+tt0175142 | American Pie 2
+tt0252866 | American Pie: The Wedding
+tt0800080 | The Incredible Hulk
+tt0371746 | Iron Man
+tt1228705 | Iron Man 2
+tt1300854 | Iron Man 3
+tt1981115 | Thor: The Dark World
+tt0800369 | Thor
+tt10648342 | Thor: Love and Thunder
+tt0458339 | Captain America: The First Avenger
+tt1843866 | Captain America: The Winter Soldier
+tt3498820 | Captain America: Civil War
+tt1825683 | Black Panther
+tt9114286 | Black Panther: Wakanda Forever
+tt2395427 | Avengers: Age of Ultron
+tt9032400 | Eternals
+tt9419884 | Doctor Strange in the Multiverse of Madness
+tt1211837 | Doctor Strange
+tt3896198 | Guardians of the Galaxy Vol. 2
+tt6791350 | Guardians of the Galaxy Vol. 3
+tt6379266 | The Flash
+tt0113189 | GoldenEye
+tt0120347 | Tomorrow Never Dies
+tt0143145 | The World Is Not Enough
+tt0246460 | Die Another Day
+tt0381061 | Casino Royale
+tt0830515 | Quantum of Solace
+tt1074638 | Skyfall
+tt2379713 | Spectre
+tt2382320 | No Time to Die
+tt0360717 | King Kong
+tt0407304 | War of the Worlds
+tt0319061 | Big Fish
+tt0330475 | Kill Bill: Vol. 1
+tt1170358 | The Hobbit: The Desolation of Smaug
+tt2310332 | The Hobbit: The Battle of the Five Armies
+tt0120362 | A Bug's Life
+tt1216475 | Cars 2
+tt3606752 | Cars 3
+tt2294629 | Frozen
+tt6105098 | The Lion King
+tt2386490 | How to Train Your Dragon 2
+tt0892769 | How to Train Your Dragon
+tt1646971 | How to Train Your Dragon: The Hidden World
+tt0268397 | Jimmy Neutron: Boy Genius
+tt0126029 | Shrek
+tt0298148 | Shrek 2
+tt0108399 | True Romance
+tt0325710 | The Last Samurai
+tt0319343 | Elf
+tt0458352 | The Pursuit of Happyness
+tt0251127 | How to Lose a Guy in 10 Days
+tt0376541 | The Upside of Anger
+tt0116695 | Jerry Maguire
+tt0100405 | Pretty Woman
+tt0103855 | The Bodyguard
+tt0117998 | Twister
+tt0120812 | Rush Hour
+tt0181865 | Rush Hour 2
+tt0293564 | Rush Hour 3
+tt0172159 | Bad Boys II
+tt1509767 | The Three Musketeers
+tt0100802 | Total Recall
+tt0111503 | True Lies
+tt0119116 | The Fifth Element
+tt0089880 | Lethal Weapon
+tt0093409 | Lethal Weapon 2
+tt0097733 | Lethal Weapon 3
+tt0104714 | Lethal Weapon 4
+tt0096874 | Back to the Future Part II
+tt0099088 | Back to the Future Part III
+tt0087469 | Gremlins
+tt0087332 | Ghostbusters
+tt1289401 | Ghostbusters: Afterlife
+tt4513678 | Ghostbusters: Frozen Empire
+tt0101272 | The Addams Family
+tt0108160 | Addams Family Values
+tt0093779 | The Princess Bride
+tt0115632 | Austin Powers: International Man of Mystery
+tt0295178 | Austin Powers in Goldmember
+tt0129387 | There's Something About Mary
+tt0107818 | Philadelphia
+tt0112579 | Scent of a Woman
+tt0095327 | Grave of the Fireflies
+tt0089881 | The Princess Bride
+tt0053125 | North by Northwest
+tt0052357 | Vertigo
+tt0047478 | Seven Samurai
+tt0056172 | Lawrence of Arabia
+tt0057012 | Dr. No
+tt0058150 | Goldfinger
+tt0064115 | Butch Cassidy and the Sundance Kid
+tt0070735 | The Sting
+tt0075314 | Taxi Driver
+tt0077416 | The Deer Hunter
+tt0082096 | The Thing
+tt0084787 | The Terminator
+tt0093870 | The Running Man
+tt0097239 | The Abyss
+tt0100150 | Misery
+tt0107207 | In the Name of the Father
+tt0112462 | Billy Madison
+tt0112697 | Happy Gilmore
+tt0112864 | The Shawshank Redemption
+tt0114746 | 12 Monkeys
+tt0144084 | American Psycho
+tt0264464 | Catch Me If You Can
+tt0268978 | A Beautiful Mind
+tt0298203 | 8 Mile
+tt0307385 | The Lion King 1½
+tt0322259 | The Notebook
+tt0338751 | The Aviator
+tt0356910 | Mr. & Mrs. Smith
+tt0369339 | Collateral
+tt0396269 | The Fall
+tt0401792 | Sin City
+tt0418279 | Transformers
+tt0451079 | Horton Hears a Who!
+tt0480249 | I Am Legend
+tt0490084 | The Curious Case of Benjamin Button
+tt0780571 | Mr. Brooks
+tt0787524 | The Men Who Stare at Goats
+tt0825232 | The Losers
+tt0831387 | Godzilla
+tt0947798 | Black Swan
+tt0988045 | Sherlock Holmes
+tt1001508 | He's Just Not That Into You
+tt1192628 | Rango
+tt1250777 | Kick-Ass
+tt1270797 | X-Men: First Class
+tt1285016 | The Social Network
+tt1291584 | Warrior
+tt1305806 | The Secret Life of Walter Mitty
+tt1343092 | The Great Gatsby
+tt1431045 | Deadpool
+tt1469304 | Baywatch
+tt1631867 | Edge of Tomorrow
+tt1663202 | The Revenant
+tt1856101 | Blade Runner 2049
+tt1979320 | Rush
+tt2179136 | American Sniper
+tt2278388 | The Grand Budapest Hotel
+tt2872718 | Nightcrawler
+tt3221694 | Zootopia
+tt3748528 | Rogue One: A Star Wars Story
+tt5027774 | Three Billboards Outside Ebbing, Missouri
+tt5109784 | Mother!
+tt6966692 | Green Book
+tt7131622 | Once Upon a Time... in Hollywood
+tt7653254 | Marriage Story
+tt8772262 | Midsommar
+tt9243946 | Elvis
+tt10640346 | Babylon
+tt11286314 | Don't Look Up
+tt15327088 | A Quiet Place: Day One
+tt22022452 | Inside Out 2
+tt6263850 | Deadpool & Wolverine
+tt31538033 | Wicked
+tt14513804 | The Batman
+tt14109724 | Nope
