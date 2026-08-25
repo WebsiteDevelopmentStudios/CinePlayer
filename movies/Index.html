@@ -128,10 +128,10 @@
 <body>
 
     <header>
-        <a href="index.html" class="logo">▶ CinePlayer</a>
+        <a href="../index.html" class="logo">▶ CinePlayer</a>
         <nav>
-            <a href="index.html">Home</a>
-            <a href="profile.html">Support Profile</a>
+            <a href="../index.html">Home</a>
+            <a href="../profile.html">Support Profile</a>
         </nav>
     </header>
 
@@ -154,7 +154,8 @@
     </div>
 
     <script>
-        // OMDb API Key is used for fetching movie posters.
+        // OMDb API Key. If posters are missing, you've hit the 1000 daily limit. 
+        // Register for a free key at omdbapi.com and paste it below.
         const OMDB_API_KEY = '8b18e18c'; 
 
         async function fetchMovies() {
@@ -204,8 +205,10 @@
 
                 const card = document.createElement('div');
                 card.className = 'movie-card';
+                
+                // Updated path: Goes up one directory from /movies/ to /main/ and opens custom-player.html
                 card.onclick = () => {
-                    window.location.href = `custom-player.html?imdb=${id}`;
+                    window.location.href = `../custom-player.html?imdb=${id}`;
                 };
                 
                 card.innerHTML = `
@@ -222,7 +225,8 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.Response === "True" && data.Poster && data.Poster !== "N/A") {
-                            posterContainer.innerHTML = `<img src="${data.Poster}" alt="${title}">`;
+                            // Add referrerPolicy to prevent broken links and onerror to cleanup
+                            posterContainer.innerHTML = `<img src="${data.Poster}" alt="${title}" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='No Poster'">`;
                         } else {
                             posterContainer.innerHTML = `No Poster`;
                         }
@@ -237,5 +241,4 @@
     </script>
 
 </body>
-    </html>
-        
+</html>
