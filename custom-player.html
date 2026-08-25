@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- Try to control browser referrer behavior -->
+  <meta name="referrer" content="no-referrer" />
   <title>Custom Player</title>
   <style>
     html, body { 
@@ -27,7 +29,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
-    // Gracefully suppress "signal is aborted without reason" caused by HLS.js dynamic chunk unloading
     window.addEventListener('unhandledrejection', event => {
       if (event.reason && (event.reason.name === 'AbortError' || /aborted/i.test(event.reason.message || ''))) {
         event.preventDefault();
@@ -41,8 +42,15 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-    // Proxy that reliably passes raw text/binary for m3u8 and ts chunks
-    const PROXY_URL = (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    // We will append the Referer as a URL parameter. Some proxies/CDNs read this, browsers do not.
+    const STREAM_REFERER = "https://example.com"; 
+
+    // Proxy fallback chain
+    const PROXIES = [
+      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      (url) => `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
 
     let hls = null;
     let unmuted = false;
@@ -64,7 +72,6 @@
     }
 
     async function init() {
-      // Silent warmup
       fetch(apiUrl).catch(() => {});
       
       try {
@@ -96,7 +103,6 @@
     async function startPlayback(streamUrl) {
       const supportsNative = video.canPlayType('application/vnd.apple.mpegurl');
 
-      // Try native player first for all platforms (Safari works, but sometimes Chrome can play directly if CORS is open initially)
       if (supportsNative) {
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
@@ -104,7 +110,6 @@
         }, { once: true });
         
         video.onerror = async () => {
-          console.log("Native playback failed, trying HLS.js with manifest rewriting...");
           video.removeAttribute('src');
           video.load();
           await startHlsWithRewrittenManifest(streamUrl);
@@ -114,7 +119,38 @@
       }
     }
 
-    // Renderer Logic: Fetch m3u8 text via proxy, rewrite chunk URLs to use proxy, feed as Blob to hls.js
+    // Try fetching the manifest through multiple proxies
+    async function fetchManifestWithFallback(streamUrl) {
+      let lastError = null;
+      const fetchOptions = {
+        method: 'GET',
+        headers: {
+          'X-Referer': STREAM_REFERER,
+          'Origin': STREAM_REFERER
+        }
+      };
+
+      for (let i = 0; i < PROXIES.length; i++) {
+        const proxyFn = PROXIES[i];
+        const proxiedUrl = proxyFn(streamUrl);
+        try {
+          const res = await fetch(proxiedUrl, fetchOptions);
+          if (res.ok) {
+            const text = await res.text();
+            if (text && text.includes('#EXTM3U')) {
+              return { text, proxyIndex: i }; 
+            }
+            lastError = new Error("Invalid manifest format.");
+          } else {
+            lastError = new Error(`Proxy ${i} returned ${res.status}`);
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError || new Error("Timeout or could not bypass anti-bot.");
+    }
+
     async function startHlsWithRewrittenManifest(streamUrl) {
       if (hls) hls.destroy();
 
@@ -125,53 +161,51 @@
 
       try {
         statusEl.style.display = 'block';
-        statusEl.innerText = "Bypassing CORS (Rewriting Manifest)...";
+        statusEl.innerText = "Bypassing CORS (Trying proxies)...";
         
-        // 1. Fetch the raw manifest text through the proxy
-        const proxiedManifestUrl = PROXY_URL(streamUrl);
-        const m3u8Res = await fetch(proxiedManifestUrl);
-        if (!m3u8Res.ok) throw new Error("Failed to load manifest via proxy.");
+        const { text: m3u8Text, proxyIndex } = await fetchManifestWithFallback(streamUrl);
+        const workingProxy = PROXIES[proxyIndex];
         
-        const m3u8Text = await m3u8Res.text();
         const lines = m3u8Text.split('\n');
 
-        // 2. Rewrite every internal URL to go through the proxy
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (line && !line.startsWith('#')) {
-            // If it's a relative URL, resolve it against the original stream URL
             const absoluteUrl = new URL(line, streamUrl).href;
-            lines[i] = PROXY_URL(absoluteUrl);
+            // Pass referer as URL param as a last hope for picky CDNs
+            lines[i] = workingProxy(`${absoluteUrl}&referer=${encodeURIComponent(STREAM_REFERER)}`);
           } else if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
-            // Rewrite URI="..." inside tags
             lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
               const absoluteUrl = new URL(p1, streamUrl).href;
-              return `URI="${PROXY_URL(absoluteUrl)}"`;
+              return `URI="${workingProxy(`${absoluteUrl}&referer=${encodeURIComponent(STREAM_REFERER)}`)}"`;
             });
           }
         }
 
         const rewrittenManifest = lines.join('\n');
-
-        // 3. Create a local Blob URL from the rewritten manifest
         const blob = new Blob([rewrittenManifest], { type: 'application/vnd.apple.mpegurl' });
         const blobUrl = URL.createObjectURL(blob);
 
         statusEl.style.display = 'none';
 
-        // 4. Hand the Blob URL directly to hls.js (No xhrSetup needed, URLs are already proxied)
-        // Enable XhrLoader explicitly or ensure fetch aborts don't fatal out
         hls = new Hls({ 
-          maxBufferLength: 30,
-          enableWorker: true
+          maxBufferLength: 30, 
+          enableWorker: true,
+          xhrSetup: (xhr, url) => {
+            // Try adding custom headers
+            try {
+              xhr.setRequestHeader('X-Referer', STREAM_REFERER);
+              xhr.setRequestHeader('Origin', STREAM_REFERER);
+            } catch(e) {}
+          }
         });
         
         hls.loadSource(blobUrl);
         hls.attachMedia(video);
 
         const timeout = setTimeout(() => {
-          showError("Video chunks failed to load via the proxy. Host might be completely blocking proxies.");
-        }, 10000);
+          showError("Timeout or could not bypass anti-bot. Host is blocking public proxies or enforcing strict Referers.");
+        }, 15000);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           clearTimeout(timeout);
@@ -179,10 +213,7 @@
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
-          // Ignore benign network aborts initiated by hls.js itself (buffer full / seek / switch)
-          if (data.details && data.details.includes('aborted')) {
-            return;
-          }
+          if (data.details && data.details.includes('aborted')) return;
           if (data.fatal) {
             clearTimeout(timeout);
             console.error("HLS.js FATAL Error:", data.details);
@@ -199,4 +230,3 @@
   </script>
 </body>
 </html>
-  
