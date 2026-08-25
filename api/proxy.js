@@ -19,9 +19,12 @@ export default async function handler(req, res) {
       headers.set('Range', req.headers.range);
     }
 
-    // Explicitly set redirect to follow, as some sub-playlists redirect
     const response = await fetch(targetUrl, { headers, redirect: 'follow' });
 
+    // Explicitly prevent Vercel from caching streaming data
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
@@ -46,4 +49,5 @@ export default async function handler(req, res) {
     console.error('Proxy Error:', error);
     return res.status(500).json({ error: 'Proxy fetch failed', details: error.message });
   }
-}
+      }
+      
