@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <!-- Try to control browser referrer behavior -->
-  <meta name="referrer" content="no-referrer" />
   <title>Custom Player</title>
   <style>
     html, body { 
@@ -42,15 +40,8 @@
     const video = document.getElementById('video');
     const statusEl = document.getElementById('status');
 
-    // We will append the Referer as a URL parameter. Some proxies/CDNs read this, browsers do not.
-    const STREAM_REFERER = "https://example.com"; 
-
-    // Proxy fallback chain
-    const PROXIES = [
-      (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-      (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      (url) => `https://thingproxy.freeboard.io/fetch/${url}`
-    ];
+    // Your own local Vercel proxy
+    const PROXY_URL = (url) => `/api/proxy?url=${encodeURIComponent(url)}`;
 
     let hls = null;
     let unmuted = false;
@@ -104,7 +95,7 @@
       const supportsNative = video.canPlayType('application/vnd.apple.mpegurl');
 
       if (supportsNative) {
-        video.src = streamUrl;
+        video.src = PROXY_URL(streamUrl);
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(e => console.log("Autoplay blocked: ", e));
         }, { once: true });
@@ -119,38 +110,6 @@
       }
     }
 
-    // Try fetching the manifest through multiple proxies
-    async function fetchManifestWithFallback(streamUrl) {
-      let lastError = null;
-      const fetchOptions = {
-        method: 'GET',
-        headers: {
-          'X-Referer': STREAM_REFERER,
-          'Origin': STREAM_REFERER
-        }
-      };
-
-      for (let i = 0; i < PROXIES.length; i++) {
-        const proxyFn = PROXIES[i];
-        const proxiedUrl = proxyFn(streamUrl);
-        try {
-          const res = await fetch(proxiedUrl, fetchOptions);
-          if (res.ok) {
-            const text = await res.text();
-            if (text && text.includes('#EXTM3U')) {
-              return { text, proxyIndex: i }; 
-            }
-            lastError = new Error("Invalid manifest format.");
-          } else {
-            lastError = new Error(`Proxy ${i} returned ${res.status}`);
-          }
-        } catch (err) {
-          lastError = err;
-        }
-      }
-      throw lastError || new Error("Timeout or could not bypass anti-bot.");
-    }
-
     async function startHlsWithRewrittenManifest(streamUrl) {
       if (hls) hls.destroy();
 
@@ -161,23 +120,26 @@
 
       try {
         statusEl.style.display = 'block';
-        statusEl.innerText = "Bypassing CORS (Trying proxies)...";
+        statusEl.innerText = "Bypassing Anti-Bot (Rewriting Manifest)...";
         
-        const { text: m3u8Text, proxyIndex } = await fetchManifestWithFallback(streamUrl);
-        const workingProxy = PROXIES[proxyIndex];
+        // 1. Fetch the raw manifest text through your Vercel proxy
+        const proxiedManifestUrl = PROXY_URL(streamUrl);
+        const m3u8Res = await fetch(proxiedManifestUrl);
+        if (!m3u8Res.ok) throw new Error("Manifest fetch failed.");
         
+        const m3u8Text = await m3u8Res.text();
         const lines = m3u8Text.split('\n');
 
+        // 2. Rewrite every internal URL to go through your Vercel proxy
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i].trim();
           if (line && !line.startsWith('#')) {
             const absoluteUrl = new URL(line, streamUrl).href;
-            // Pass referer as URL param as a last hope for picky CDNs
-            lines[i] = workingProxy(`${absoluteUrl}&referer=${encodeURIComponent(STREAM_REFERER)}`);
+            lines[i] = PROXY_URL(absoluteUrl);
           } else if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
             lines[i] = line.replace(/URI="([^"]+)"/g, (match, p1) => {
               const absoluteUrl = new URL(p1, streamUrl).href;
-              return `URI="${workingProxy(`${absoluteUrl}&referer=${encodeURIComponent(STREAM_REFERER)}`)}"`;
+              return `URI="${PROXY_URL(absoluteUrl)}"`;
             });
           }
         }
@@ -188,24 +150,13 @@
 
         statusEl.style.display = 'none';
 
-        hls = new Hls({ 
-          maxBufferLength: 30, 
-          enableWorker: true,
-          xhrSetup: (xhr, url) => {
-            // Try adding custom headers
-            try {
-              xhr.setRequestHeader('X-Referer', STREAM_REFERER);
-              xhr.setRequestHeader('Origin', STREAM_REFERER);
-            } catch(e) {}
-          }
-        });
-        
+        hls = new Hls({ maxBufferLength: 30 });
         hls.loadSource(blobUrl);
         hls.attachMedia(video);
 
         const timeout = setTimeout(() => {
-          showError("Timeout or could not bypass anti-bot. Host is blocking public proxies or enforcing strict Referers.");
-        }, 15000);
+          showError("Video chunks failed to load via the proxy.");
+        }, 10000);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           clearTimeout(timeout);
@@ -222,7 +173,7 @@
         });
 
       } catch (error) {
-        showError("Failed to bypass CORS: " + error.message);
+        showError("Failed to bypass: " + error.message);
       }
     }
 
