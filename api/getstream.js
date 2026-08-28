@@ -1,7 +1,7 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
-const HARD_TIMEOUT = 8500;
+const HARD_TIMEOUT = 9500;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -61,7 +61,6 @@ export default async function handler(req, res) {
           foundStreamUrl = url;
         }
         
-        // Only block images, let everything else through so the player works
         if (request.resourceType() === 'image') {
           return request.abort();
         }
@@ -71,21 +70,33 @@ export default async function handler(req, res) {
 
       const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
       
-      // Wait for network to be mostly idle so React has time to boot
-      await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 6000 }).catch(() => {});
+      // Use domcontentloaded to be faster
+      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
 
-      // Wait 1.5 seconds for React to render the play button
+      // Give React a moment to paint the DOM
       await new Promise(r => setTimeout(r, 1500));
 
-      // Try to click play
-      await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
-        const playButton = buttons.find(b => b.textContent.includes('Play') || b.classList.contains('vjs-big-play-button') || b.classList.contains('plyr__control'));
-        if (playButton) playButton.click();
-      }).catch(() => {});
+      // Try to click the play button by coordinates or button text
+      try {
+        await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"], a, div'));
+          // Broadly click any element that looks remotely like a play button in the center
+          const playButton = buttons.find(b => 
+            b.textContent.includes('Play') || 
+            b.textContent.includes('Watch') || 
+            b.classList.contains('vjs-big-play-button') || 
+            b.classList.contains('plyr__control') ||
+            b.classList.contains('jw-icon')
+          );
+          if (playButton) playButton.click();
+          
+          // Just blindly click the center of the screen in case the player overlay is there
+          document.elementFromPoint(640, 360)?.click();
+        });
+      } catch (e) { }
       
-      // Wait up to 4 seconds for the stream URL to trigger
-      for (let i = 0; i < 8; i++) {
+      // Wait up to 7 seconds for the stream URL to trigger
+      for (let i = 0; i < 14; i++) {
         if (foundStreamUrl) break;
         await new Promise(r => setTimeout(r, 500));
       }
@@ -97,7 +108,7 @@ export default async function handler(req, res) {
       if (foundStreamUrl) {
         resolve({ success: true, streamUrl: foundStreamUrl });
       } else {
-        reject(new Error("Timeout or could not bypass anti-bot."));
+        reject(new Error("Video player did not load the stream in time."));
       }
 
     } catch (error) {
@@ -117,5 +128,5 @@ export default async function handler(req, res) {
       error: error.message
     });
   }
-    }
-        
+        }
+      
