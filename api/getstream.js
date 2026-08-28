@@ -54,48 +54,36 @@ export default async function handler(req, res) {
 
       let foundStreamUrl = null;
       
-      await page.setRequestInterception(true);
+      // PASSIVE LISTENER: Just listen for requests, do not intercept or block them
       page.on('request', (request) => {
         const url = request.url();
         if (url.includes('.m3u8') || url.includes('.mp4')) {
           foundStreamUrl = url;
         }
-        
-        if (request.resourceType() === 'image') {
-          return request.abort();
-        }
-        
-        request.continue();
       });
 
       const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
       
-      // Use domcontentloaded to be faster
-      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
+      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 6000 }).catch(() => {});
 
-      // Give React a moment to paint the DOM
-      await new Promise(r => setTimeout(r, 1500));
+      // Give React a moment to paint
+      await new Promise(r => setTimeout(r, 2000));
 
-      // Try to click the play button by coordinates or button text
+      // Try to click play
       try {
         await page.evaluate(() => {
           const buttons = Array.from(document.querySelectorAll('button, [role="button"], a, div'));
-          // Broadly click any element that looks remotely like a play button in the center
           const playButton = buttons.find(b => 
             b.textContent.includes('Play') || 
-            b.textContent.includes('Watch') || 
             b.classList.contains('vjs-big-play-button') || 
-            b.classList.contains('plyr__control') ||
-            b.classList.contains('jw-icon')
+            b.classList.contains('plyr__control')
           );
           if (playButton) playButton.click();
-          
-          // Just blindly click the center of the screen in case the player overlay is there
           document.elementFromPoint(640, 360)?.click();
         });
       } catch (e) { }
       
-      // Wait up to 7 seconds for the stream URL to trigger
+      // Wait up to 7 seconds for the stream URL
       for (let i = 0; i < 14; i++) {
         if (foundStreamUrl) break;
         await new Promise(r => setTimeout(r, 500));
@@ -128,5 +116,5 @@ export default async function handler(req, res) {
       error: error.message
     });
   }
-        }
-      
+                           }
+          
