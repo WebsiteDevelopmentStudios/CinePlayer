@@ -1,6 +1,11 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
+// Override Vercel's 15-second timeout limit to 60 seconds
+export const config = {
+  maxDuration: 15,
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { imdb } = req.query;
@@ -38,53 +43,62 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
     
-    // STEALTH MODE: Hide the fact that we are a bot
+    // STEALTH MODE
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', {
-        get: () => false,
-      });
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
-      });
-      Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en'],
-      });
-      window.chrome = {
-        runtime: {},
-      };
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+      window.chrome = { runtime: {} };
     });
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
 
     let foundStreamUrl = null;
+    
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      if (url.includes('.m3u8') && !url.includes('cineby.hair/_stream')) {
+      if (url.includes('.m3u8') || url.includes('.mp4')) {
         foundStreamUrl = url;
       }
       request.continue();
     });
 
     // STEP 3: Navigate to the movie page
-    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
+    const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
     
     await page.goto(movieUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15000
+      waitUntil: 'load',
+      timeout: 15000 // Increased to 15 seconds just in case Chrome is slow to load the page
     }).catch(() => {});
 
-    // Poll for the stream URL for up to 10 seconds
+    // Wait 2 seconds for React to render
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Scroll down to make sure the player is in view
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 3));
+    
+    // STEP 4: Click the play button
+    try {
+      await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+        const playButton = buttons.find(b => b.textContent.includes('Play') || b.classList.contains('vjs-big-play-button') || b.classList.contains('plyr__control'));
+        if (playButton) playButton.click();
+      });
+    } catch (e) { /* ignore */ }
+    
+    // Wait up to 10 seconds for the video stream to load after clicking
     for (let i = 0; i < 10; i++) {
       if (foundStreamUrl) break;
-      await new Promise(r => setTimeout(r, 1000)); // wait 1 second
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     await browser.close();
     browser = null;
 
-    // STEP 4: Return the intercepted URL
+    // STEP 5: Return the intercepted URL
     if (foundStreamUrl) {
       return res.status(200).json({
         success: true,
@@ -101,10 +115,9 @@ export default async function handler(req, res) {
     if (browser) {
       await browser.close().catch(() => {});
     }
-
     return res.status(500).json({
       error: 'Chromium crash reason: ' + error.message
     });
   }
-                                 }
-  
+      }
+                                     
