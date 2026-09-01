@@ -3,11 +3,11 @@ import puppeteer from 'puppeteer-core';
 
 // Allow Vercel to run this function for up to 60 seconds
 export const config = {
-  maxDuration: 60,
+  maxDuration: 14,
 };
 
 // Our own internal limit, raised to 25 seconds
-const HARD_TIMEOUT = 25000;
+const HARD_TIMEOUT = 15000;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
