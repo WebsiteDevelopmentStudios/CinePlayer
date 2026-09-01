@@ -7,7 +7,7 @@ export const config = {
 };
 
 // Our own internal limit, raised to 25 seconds
-const HARD_TIMEOUT = 15000;
+const HARD_TIMEOUT = 14000;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
