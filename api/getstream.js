@@ -1,7 +1,13 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
-const HARD_TIMEOUT = 9500;
+// Allow Vercel to run this function for up to 60 seconds
+export const config = {
+  maxDuration: 60,
+};
+
+// Our own internal limit, raised to 25 seconds
+const HARD_TIMEOUT = 25000;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -54,7 +60,7 @@ export default async function handler(req, res) {
 
       let foundStreamUrl = null;
       
-      // PASSIVE LISTENER: Just listen for requests, do not intercept or block them
+      // Passive listener, don't intercept
       page.on('request', (request) => {
         const url = request.url();
         if (url.includes('.m3u8') || url.includes('.mp4')) {
@@ -64,10 +70,10 @@ export default async function handler(req, res) {
 
       const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
       
-      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 6000 }).catch(() => {});
+      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 12000 }).catch(() => {});
 
-      // Give React a moment to paint
-      await new Promise(r => setTimeout(r, 2000));
+      // Give React time to fully boot and render the player
+      await new Promise(r => setTimeout(r, 3000));
 
       // Try to click play
       try {
@@ -83,8 +89,8 @@ export default async function handler(req, res) {
         });
       } catch (e) { }
       
-      // Wait up to 7 seconds for the stream URL
-      for (let i = 0; i < 14; i++) {
+      // Wait up to 18 seconds for the stream URL
+      for (let i = 0; i < 36; i++) {
         if (foundStreamUrl) break;
         await new Promise(r => setTimeout(r, 500));
       }
@@ -116,5 +122,5 @@ export default async function handler(req, res) {
       error: error.message
     });
   }
-                           }
-          
+      }
+        
