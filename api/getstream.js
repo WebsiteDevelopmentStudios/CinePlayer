@@ -1,13 +1,7 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
-// Allow Vercel to run this function for up to 60 seconds
-export const config = {
-  maxDuration: 14,
-};
-
-// Our own internal limit, raised to 25 seconds
-const HARD_TIMEOUT = 14000;
+const HARD_TIMEOUT = 8500;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -60,37 +54,38 @@ export default async function handler(req, res) {
 
       let foundStreamUrl = null;
       
-      // Passive listener, don't intercept
+      await page.setRequestInterception(true);
       page.on('request', (request) => {
         const url = request.url();
         if (url.includes('.m3u8') || url.includes('.mp4')) {
           foundStreamUrl = url;
         }
+        
+        // Only block images, let everything else through so the player works
+        if (request.resourceType() === 'image') {
+          return request.abort();
+        }
+        
+        request.continue();
       });
 
       const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
       
-      await page.goto(movieUrl, { waitUntil: 'domcontentloaded', timeout: 12000 }).catch(() => {});
+      // Wait for network to be mostly idle so React has time to boot
+      await page.goto(movieUrl, { waitUntil: 'networkidle2', timeout: 6000 }).catch(() => {});
 
-      // Give React time to fully boot and render the player
-      await new Promise(r => setTimeout(r, 3000));
+      // Wait 1.5 seconds for React to render the play button
+      await new Promise(r => setTimeout(r, 1500));
 
       // Try to click play
-      try {
-        await page.evaluate(() => {
-          const buttons = Array.from(document.querySelectorAll('button, [role="button"], a, div'));
-          const playButton = buttons.find(b => 
-            b.textContent.includes('Play') || 
-            b.classList.contains('vjs-big-play-button') || 
-            b.classList.contains('plyr__control')
-          );
-          if (playButton) playButton.click();
-          document.elementFromPoint(640, 360)?.click();
-        });
-      } catch (e) { }
+      await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
+        const playButton = buttons.find(b => b.textContent.includes('Play') || b.classList.contains('vjs-big-play-button') || b.classList.contains('plyr__control'));
+        if (playButton) playButton.click();
+      }).catch(() => {});
       
-      // Wait up to 18 seconds for the stream URL
-      for (let i = 0; i < 36; i++) {
+      // Wait up to 4 seconds for the stream URL to trigger
+      for (let i = 0; i < 8; i++) {
         if (foundStreamUrl) break;
         await new Promise(r => setTimeout(r, 500));
       }
@@ -102,7 +97,7 @@ export default async function handler(req, res) {
       if (foundStreamUrl) {
         resolve({ success: true, streamUrl: foundStreamUrl });
       } else {
-        reject(new Error("Video player did not load the stream in time."));
+        reject(new Error("Timeout or could not bypass anti-bot."));
       }
 
     } catch (error) {
@@ -122,5 +117,5 @@ export default async function handler(req, res) {
       error: error.message
     });
   }
-      }
+    }
         
