@@ -1,11 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
-// Override Vercel's 15-second timeout limit to 60 seconds
-export const config = {
-  maxDuration: 15,
-};
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { imdb } = req.query;
@@ -71,7 +66,7 @@ export default async function handler(req, res) {
     
     await page.goto(movieUrl, {
       waitUntil: 'load',
-      timeout: 15000 // Increased to 15 seconds just in case Chrome is slow to load the page
+      timeout: 6000 // Reduced to 6 seconds
     }).catch(() => {});
 
     // Wait 2 seconds for React to render
@@ -89,8 +84,8 @@ export default async function handler(req, res) {
       });
     } catch (e) { /* ignore */ }
     
-    // Wait up to 10 seconds for the video stream to load after clicking
-    for (let i = 0; i < 10; i++) {
+    // Wait 3 seconds for the video stream to load after clicking
+    for (let i = 0; i < 3; i++) {
       if (foundStreamUrl) break;
       await new Promise(r => setTimeout(r, 1000));
     }
@@ -119,5 +114,5 @@ export default async function handler(req, res) {
       error: 'Chromium crash reason: ' + error.message
     });
   }
-      }
-                                     
+        }
+  nñn
