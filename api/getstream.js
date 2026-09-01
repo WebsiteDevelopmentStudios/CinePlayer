@@ -38,62 +38,53 @@ export default async function handler(req, res) {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
     
-    // STEALTH MODE
+    // STEALTH MODE: Hide the fact that we are a bot
     await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-      Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-      window.chrome = { runtime: {} };
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+      });
+      window.chrome = {
+        runtime: {},
+      };
     });
 
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36');
 
     let foundStreamUrl = null;
-    
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = request.url();
-      if (url.includes('.m3u8') || url.includes('.mp4')) {
+      if (url.includes('.m3u8') && !url.includes('cineby.hair/_stream')) {
         foundStreamUrl = url;
       }
       request.continue();
     });
 
     // STEP 3: Navigate to the movie page
-    const movieUrl = `https://cineby.tech/movie/${tmdbId}/watch?autostart=true`;
+    const movieUrl = `https://cineby.hair/movie/${tmdbId}?autostart=true`;
     
     await page.goto(movieUrl, {
-      waitUntil: 'load',
-      timeout: 6000 // Reduced to 6 seconds
+      waitUntil: 'domcontentloaded',
+      timeout: 15000
     }).catch(() => {});
 
-    // Wait 2 seconds for React to render
-    await new Promise(r => setTimeout(r, 2000));
-
-    // Scroll down to make sure the player is in view
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 3));
-    
-    // STEP 4: Click the play button
-    try {
-      await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"], a'));
-        const playButton = buttons.find(b => b.textContent.includes('Play') || b.classList.contains('vjs-big-play-button') || b.classList.contains('plyr__control'));
-        if (playButton) playButton.click();
-      });
-    } catch (e) { /* ignore */ }
-    
-    // Wait 3 seconds for the video stream to load after clicking
-    for (let i = 0; i < 3; i++) {
+    // Poll for the stream URL for up to 10 seconds
+    for (let i = 0; i < 10; i++) {
       if (foundStreamUrl) break;
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1000)); // wait 1 second
     }
 
     await browser.close();
     browser = null;
 
-    // STEP 5: Return the intercepted URL
+    // STEP 4: Return the intercepted URL
     if (foundStreamUrl) {
       return res.status(200).json({
         success: true,
@@ -110,9 +101,10 @@ export default async function handler(req, res) {
     if (browser) {
       await browser.close().catch(() => {});
     }
+
     return res.status(500).json({
       error: 'Chromium crash reason: ' + error.message
     });
   }
-        }
-  nñn
+                                 }
+  
